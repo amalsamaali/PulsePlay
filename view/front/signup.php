@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PulsePlay - Connexion</title>
+    <title>PulsePlay - Inscription</title>
     <style>
         * {
             margin: 0;
@@ -21,12 +21,12 @@
             align-items: center;
         }
 
-        .login-container {
+        .signup-container {
             background: rgba(26, 26, 46, 0.8);
             border-radius: 10px;
             padding: 2rem;
             width: 100%;
-            max-width: 400px;
+            max-width: 450px;
             box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
         }
 
@@ -51,7 +51,7 @@
             color: #b8b8b8;
         }
 
-        input {
+        input, select {
             width: 100%;
             padding: 0.8rem;
             border-radius: 5px;
@@ -61,7 +61,7 @@
             font-size: 1rem;
         }
 
-        input:focus {
+        input:focus, select:focus {
             outline: none;
             border-color: #00d4aa;
             box-shadow: 0 0 0 2px rgba(0, 212, 170, 0.2);
@@ -91,84 +91,96 @@
             min-height: 1.5rem;
         }
 
-        .signup-link {
+        .login-link {
             margin-top: 1.5rem;
             text-align: center;
         }
 
-        .signup-link a {
+        .login-link a {
             color: #00d4aa;
             text-decoration: none;
         }
 
-        .signup-link a:hover {
+        .login-link a:hover {
             text-decoration: underline;
-        }
-
-        .back-to-home {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            color: white;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.9rem;
-            transition: all 0.3s ease;
-        }
-
-        .back-to-home:hover {
-            color: #00d4aa;
         }
     </style>
 </head>
 <body>
-    <a href="index.php" class="back-to-home">← Retour à l'accueil</a>
-    
-    <div class="login-container">
-        <h1>Connexion</h1>
-        <form id="loginForm">
+    <div class="signup-container">
+        <h1>Créer un compte</h1>
+        <form id="signupForm">
+            <div class="form-group">
+                <label for="nom">Nom</label>
+                <input type="text" id="nom" name="nom" required>
+            </div>
+            <div class="form-group">
+                <label for="prenom">Prénom</label>
+                <input type="text" id="prenom" name="prenom" required>
+            </div>
             <div class="form-group">
                 <label for="email">Email</label>
                 <input type="email" id="email" name="email" required>
             </div>
             <div class="form-group">
-                <label for="password">Mot de passe</label>
-                <input type="password" id="password" name="password" required>
+                <label for="mot_de_passe">Mot de passe</label>
+                <input type="password" id="mot_de_passe" name="mot_de_passe" required>
             </div>
-            <button type="submit">Se connecter</button>
-            <div class="message" id="loginMessage"></div>
-            <div class="signup-link">
-                <p>Pas encore de compte ? <a href="signup.php">S'inscrire</a></p>
+            <div class="form-group">
+                <label for="confirm_mot_de_passe">Confirmer le mot de passe</label>
+                <input type="password" id="confirm_mot_de_passe" name="confirm_mot_de_passe" required>
+            </div>
+            <div class="form-group">
+                <label for="role">Je suis</label>
+                <select id="role" name="role">
+                    <option value="adherent">Adhérent</option>
+                    <option value="entraineur">Entraîneur</option>
+                </select>
+            </div>
+            <button type="submit">S'inscrire</button>
+            <div class="message" id="signupMessage"></div>
+            <div class="login-link">
+                <p>Déjà inscrit ? <a href="login.php">Se connecter</a></p>
             </div>
         </form>
     </div>
 
     <script>
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
+        document.getElementById('signupForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const formData = new FormData(this);
-            const message = document.getElementById('loginMessage');
+            const message = document.getElementById('signupMessage');
             
             // Réinitialiser le message
             message.textContent = "";
             message.style.color = "";
             
+            // Vérifier que les mots de passe correspondent
+            const password = formData.get('mot_de_passe');
+            const confirmPassword = formData.get('confirm_mot_de_passe');
+            
+            if (password !== confirmPassword) {
+                message.textContent = "Les mots de passe ne correspondent pas.";
+                message.style.color = "#ff6b6b";
+                return;
+            }
+            
             // Envoyer les données au serveur
-            fetch('/PulsePlay/controller/UtilisateurController.php?action=login', {
+            fetch('/PulsePlay/controller/UtilisateurController.php?action=signup', {
                 method: 'POST',
                 body: formData
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    message.textContent = "Connexion réussie ! Redirection...";
+                    message.textContent = data.message;
                     message.style.color = "#00d4aa";
-                    // Rediriger vers la page appropriée
+                    // Réinitialiser le formulaire après succès
+                    document.getElementById('signupForm').reset();
+                    // Rediriger vers la page de connexion après 2 secondes
                     setTimeout(() => {
-                        window.location.href = data.redirect;
-                    }, 1000);
+                        window.location.href = "login.php";
+                    }, 2000);
                 } else {
                     message.textContent = data.message;
                     message.style.color = "#ff6b6b";

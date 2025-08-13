@@ -81,7 +81,7 @@
             width: 100%;
         }
 
-        .login-btn {
+        .login-btn, .signup-btn {
             background: linear-gradient(45deg, #00d4aa, #00b4d8);
             border: none;
             padding: 0.8rem 2rem;
@@ -90,11 +90,18 @@
             font-weight: bold;
             cursor: pointer;
             transition: all 0.3s ease;
+            text-decoration: none;
+            margin-left: 1rem;
         }
 
-        .login-btn:hover {
+        .login-btn:hover, .signup-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 20px rgba(0, 212, 170, 0.3);
+        }
+        
+        .signup-btn {
+            background: transparent;
+            border: 2px solid #00d4aa;
         }
 
         /* Hero Section */
@@ -410,53 +417,127 @@
     z-index: 2000;
     left: 0; top: 0;
     width: 100%; height: 100%;
-    background-color: rgba(0,0,0,0.6);
-    display: flex;
+    background-color: rgba(0,0,0,0.8);
+    display: none;
     align-items: center;
     justify-content: center;
+    backdrop-filter: blur(5px);
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideIn {
+    from { transform: translateY(-30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
 }
 
 .modal-content {
-    background: #1a1a2e;
-    padding: 20px;
-    border-radius: 10px;
-    width: 350px;
+    background: linear-gradient(145deg, #1a1a2e, #16213e);
+    padding: 30px;
+    border-radius: 15px;
+    width: 400px;
     color: white;
     position: relative;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(0, 212, 170, 0.2);
+    animation: slideIn 0.4s ease-out;
 }
 
-.modal-content button#closeLogin {
+.modal-content h2 {
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 1.8rem;
+    background: linear-gradient(45deg, #00d4aa, #00b4d8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.modal-content button#closeLogin, .modal-content button#closeSignup {
     position: absolute;
-    top: 10px;
-    right: 15px;
+    top: 15px;
+    right: 20px;
     background: none;
     border: none;
-    color: white;
-    font-size: 1.5rem;
+    color: #b8b8b8;
+    font-size: 1.8rem;
     cursor: pointer;
+    transition: all 0.3s ease;
 }
 
-input, .modal-content button[type="submit"] {
+.modal-content button#closeLogin:hover, .modal-content button#closeSignup:hover {
+    color: #00d4aa;
+    transform: rotate(90deg);
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.modal-content input, .modal-content select {
     width: 100%;
-    padding: 10px;
-    margin: 8px 0;
-    border-radius: 5px;
-    border: none;
+    padding: 12px 15px;
+    margin: 10px 0;
+    border-radius: 8px;
+    border: 1px solid #2a2a4a;
+    background: rgba(15, 15, 35, 0.5);
+    color: white;
     font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+.modal-content input:focus, .modal-content select:focus {
+    outline: none;
+    border-color: #00d4aa;
+    box-shadow: 0 0 0 2px rgba(0, 212, 170, 0.2);
+}
+
+.modal-content input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
 }
 
 .modal-content button[type="submit"] {
-    background: #00d4aa;
+    width: 100%;
+    padding: 12px;
+    margin: 15px 0 10px;
+    border-radius: 8px;
+    border: none;
+    background: linear-gradient(45deg, #00d4aa, #00b4d8);
     color: white;
     font-weight: bold;
+    font-size: 1.1rem;
     cursor: pointer;
-    border: none;
+    transition: all 0.3s ease;
 }
 
-#loginMessage {
+.modal-content button[type="submit"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(0, 212, 170, 0.3);
+}
+
+.modal-content button[type="submit"]:active {
+    transform: translateY(0);
+}
+
+#loginMessage, #signupMessage {
     color: #ff6b6b;
-    min-height: 1.2em;
+    min-height: 1.5em;
     margin-top: 10px;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+/* Style pour les messages d'erreur et de succès */
+.error-message {
+    color: #ff6b6b;
+}
+
+.success-message {
+    color: #00d4aa;
 }
 
     </style>
@@ -476,7 +557,7 @@ input, .modal-content button[type="submit"] {
             </nav>
             <div style="display:flex;gap:1rem;">
                 <button id="openLogin" class="login-btn">Connexion</button>
-                <button id="openSignup" class="login-btn" style="background:linear-gradient(45deg,#00b4d8,#00d4aa);">S'inscrire</button>
+                <button id="openSignup" class="signup-btn">S'inscrire</button>
             </div>
         </div>
     </header>
@@ -637,53 +718,85 @@ input, .modal-content button[type="submit"] {
         });
     </script>
     <!-- Modale login -->
-<div class="modal" id="loginModal" style="display:none;">
+<div class="modal" id="loginModal" style="display: none;">
     <div class="modal-content">
         <button id="closeLogin" title="Fermer la fenêtre">×</button>
         <h2>Connexion</h2>
         <form id="loginForm" autocomplete="off">
-            <input type="email" name="email" placeholder="Email" />
-            <input type="password" name="password" placeholder="Mot de passe" />
+            <div class="form-group">
+                <input type="email" name="email" placeholder="Email" required />
+            </div>
+            <div class="form-group">
+                <input type="password" name="password" placeholder="Mot de passe" required />
+            </div>
             <button type="submit">Se connecter</button>
         </form>
         <p id="loginMessage"></p>
+        <div style="text-align: center; margin-top: 15px;">
+            <a href="#" id="switchToSignup" style="color: #00d4aa; text-decoration: none; font-size: 0.9rem;">Pas encore de compte ? S'inscrire</a>
+        </div>
     </div>
 </div>
 
 <!-- Modale signup -->
-<div class="modal" id="signupModal" style="display:none;">
+<div class="modal" id="signupModal" style="display: none;">
     <div class="modal-content">
         <button id="closeSignup" title="Fermer la fenêtre">×</button>
         <h2>Inscription</h2>
         <form id="signupForm" autocomplete="off">
-            <input type="text" name="nom" placeholder="Nom" />
-            <input type="text" name="prenom" placeholder="Prénom" />
-            <input type="email" name="email" placeholder="Email" />
-            <select name="role">
-                <option value="">-- Choisir un rôle --</option>
-                <option value="adherent">Adhérent</option>
-                <option value="entraineur">Entraîneur</option>
-            </select>
-            <input type="password" name="mot_de_passe" placeholder="Mot de passe" />
-            <input type="password" name="confirm_mot_de_passe" placeholder="Confirmer le mot de passe" />
+            <div class="form-group">
+                <input type="text" name="nom" placeholder="Nom" required />
+            </div>
+            <div class="form-group">
+                <input type="text" name="prenom" placeholder="Prénom" required />
+            </div>
+            <div class="form-group">
+                <input type="email" name="email" placeholder="Email" required />
+            </div>
+            <div class="form-group">
+                <select name="role" required>
+                    <option value="">-- Choisir un rôle --</option>
+                    <option value="adherent">Adhérent</option>
+                    <option value="entraineur">Entraîneur</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <input type="password" name="mot_de_passe" placeholder="Mot de passe" required />
+            </div>
+            <div class="form-group">
+                <input type="password" name="confirm_mot_de_passe" placeholder="Confirmer le mot de passe" required />
+            </div>
             <button type="submit">S'inscrire</button>
         </form>
         <p id="signupMessage"></p>
-        <button id="switchToLogin" type="button" style="background:#16213e;margin-top:8px;width:100%;color:#00d4aa;">Déjà inscrit ? Se connecter</button>
+        <div style="text-align: center; margin-top: 15px;">
+            <a href="#" id="switchToLogin" style="color: #00d4aa; text-decoration: none; font-size: 0.9rem;">Déjà inscrit ? Se connecter</a>
+        </div>
     </div>
 </div>
 <script>
     // Ouvrir la modale au clic sur le bouton connexion
-    document.getElementById('openLogin').addEventListener('click', function() {
+    document.getElementById('openLogin').addEventListener('click', function(e) {
+        e.preventDefault();
         document.getElementById('loginModal').style.display = 'flex';
         document.getElementById('signupModal').style.display = 'none';
     });
 
-    document.getElementById('openSignup').addEventListener('click', function() {
+    document.getElementById('openSignup').addEventListener('click', function(e) {
+        e.preventDefault();
         document.getElementById('signupModal').style.display = 'flex';
         document.getElementById('loginModal').style.display = 'none';
     });
-
+    
+    // Basculer entre les modales
+    document.getElementById('switchToSignup').addEventListener('click', function(e) {
+        e.preventDefault();
+        document.getElementById('loginModal').style.display = 'none';
+        document.getElementById('signupModal').style.display = 'flex';
+        document.getElementById('loginMessage').textContent = '';
+        document.getElementById('loginForm').reset();
+    });
+    
     document.getElementById('closeLogin').addEventListener('click', function() {
         document.getElementById('loginModal').style.display = 'none';
         document.getElementById('loginMessage').textContent = '';
@@ -695,10 +808,31 @@ input, .modal-content button[type="submit"] {
         document.getElementById('signupMessage').textContent = '';
         document.getElementById('signupForm').reset();
     });
-
-    document.getElementById('switchToLogin').addEventListener('click', function() {
+    
+    document.getElementById('switchToLogin').addEventListener('click', function(e) {
+        e.preventDefault();
         document.getElementById('signupModal').style.display = 'none';
         document.getElementById('loginModal').style.display = 'flex';
+        document.getElementById('signupMessage').textContent = '';
+        document.getElementById('signupForm').reset();
+    });
+    
+    // Fermer les modales en cliquant en dehors
+    window.addEventListener('click', function(e) {
+        const loginModal = document.getElementById('loginModal');
+        const signupModal = document.getElementById('signupModal');
+        
+        if (e.target === loginModal) {
+            loginModal.style.display = 'none';
+            document.getElementById('loginMessage').textContent = '';
+            document.getElementById('loginForm').reset();
+        }
+        
+        if (e.target === signupModal) {
+            signupModal.style.display = 'none';
+            document.getElementById('signupMessage').textContent = '';
+            document.getElementById('signupForm').reset();
+        }
     });
 
     // Soumission formulaire login en AJAX
@@ -717,11 +851,15 @@ input, .modal-content button[type="submit"] {
             msg = "Le mot de passe doit contenir au moins 6 caractères.";
         }
         if (msg) {
-            document.getElementById('loginMessage').style.color = '#ff6b6b';
+            document.getElementById('loginMessage').className = 'error-message';
             document.getElementById('loginMessage').textContent = msg;
             return;
         }
         const formData = new FormData(this);
+        // Afficher un message de chargement
+        document.getElementById('loginMessage').textContent = 'Connexion en cours...';
+        document.getElementById('loginMessage').className = '';
+        
         fetch('/PulsePlay/controller/UtilisateurController.php?action=login', {
             method: 'POST',
             body: formData
@@ -729,12 +867,16 @@ input, .modal-content button[type="submit"] {
         .then(res => res.json())
         .then(data => {
             if(data.success) {
+                document.getElementById('loginMessage').className = 'success-message';
+                document.getElementById('loginMessage').textContent = 'Connexion réussie!';
                 window.location.href = data.redirect;
             } else {
+                document.getElementById('loginMessage').className = 'error-message';
                 document.getElementById('loginMessage').textContent = data.message;
             }
         })
         .catch(() => {
+            document.getElementById('loginMessage').className = 'error-message';
             document.getElementById('loginMessage').textContent = "Erreur réseau.";
         });
     });
@@ -769,11 +911,15 @@ input, .modal-content button[type="submit"] {
             msg = "Les mots de passe ne correspondent pas.";
         }
         if (msg) {
-            document.getElementById('signupMessage').style.color = '#ff6b6b';
+            document.getElementById('signupMessage').className = 'error-message';
             document.getElementById('signupMessage').textContent = msg;
             return;
         }
         const formData = new FormData(this);
+        // Afficher un message de chargement
+        document.getElementById('signupMessage').textContent = 'Inscription en cours...';
+        document.getElementById('signupMessage').className = '';
+        
         fetch('/PulsePlay/controller/UtilisateurController.php?action=signup', {
             method: 'POST',
             body: formData
@@ -781,7 +927,7 @@ input, .modal-content button[type="submit"] {
         .then(res => res.json())
         .then(data => {
             if(data.success) {
-                document.getElementById('signupMessage').style.color = '#00d4aa';
+                document.getElementById('signupMessage').className = 'success-message';
                 document.getElementById('signupMessage').textContent = data.message || 'Inscription réussie !';
                 setTimeout(() => {
                     document.getElementById('signupModal').style.display = 'none';
@@ -789,12 +935,12 @@ input, .modal-content button[type="submit"] {
                     document.getElementById('signupMessage').textContent = '';
                 }, 1200);
             } else {
-                document.getElementById('signupMessage').style.color = '#ff6b6b';
+                document.getElementById('signupMessage').className = 'error-message';
                 document.getElementById('signupMessage').textContent = data.message;
             }
         })
         .catch(() => {
-            document.getElementById('signupMessage').style.color = '#ff6b6b';
+            document.getElementById('signupMessage').className = 'error-message';
             document.getElementById('signupMessage').textContent = "Erreur réseau.";
         });
     });

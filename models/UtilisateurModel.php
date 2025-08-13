@@ -1,25 +1,61 @@
 <?php
+require_once '../config.php';
+
 class UtilisateurModel {
-    private $pdo;
+    private $id;
+    private $nom;
+    private $prenom;
+    private $email;
+    private $mot_de_passe;
+    private $role;
+    private $is_actif;
 
-    public function __construct() {
-        $this->pdo = new PDO("mysql:host=localhost;dbname=web_sport;charset=utf8", "root", "");
-        $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    public function __construct($id = null, $nom = null, $prenom = null, $email = null, $mot_de_passe = null, $role = 'adherent', $is_actif = 0) {
+        $this->id = $id;
+        $this->nom = $nom;
+        $this->prenom = $prenom;
+        $this->email = $email;
+        $this->mot_de_passe = $mot_de_passe;
+        $this->role = $role;
+        $this->is_actif = $is_actif;
     }
 
-    public function getUserByEmail(string $email): ?array {
-        $stmt = $this->pdo->prepare("SELECT * FROM utilisateurs WHERE email = ?");
+    // --- Getters ---
+    public function getId() { return $this->id; }
+    public function getNom() { return $this->nom; }
+    public function getPrenom() { return $this->prenom; }
+    public function getEmail() { return $this->email; }
+    public function getMotDePasse() { return $this->mot_de_passe; }
+    public function getRole() { return $this->role; }
+    public function getIsActif() { return $this->is_actif; }
+
+    // --- Setters ---
+    public function setId($id) { $this->id = $id; }
+    public function setNom($nom) { $this->nom = $nom; }
+    public function setPrenom($prenom) { $this->prenom = $prenom; }
+    public function setEmail($email) { $this->email = $email; }
+    public function setMotDePasse($mot_de_passe) { $this->mot_de_passe = $mot_de_passe; }
+    public function setRole($role) { $this->role = $role; }
+    public function setIsActif($is_actif) { $this->is_actif = $is_actif; }
+
+    // --- CRUD ---
+    public function getUserByEmail($email) {
+        $db = Database::connect();
+        $stmt = $db->prepare("SELECT * FROM utilisateurs WHERE email = ?");
         $stmt->execute([$email]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $user ?: null;
+        return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
-    public function createUser(string $nom, string $prenom, string $email, string $hashedPassword, string $role = 'adherent', int $is_actif = 0): bool {
-        $stmt = $this->pdo->prepare("INSERT INTO utilisateurs (nom, prenom, email, mot_de_passe, role, is_actif) VALUES (?, ?, ?, ?, ?, ?)");
-        try {
-            return $stmt->execute([$nom, $prenom, $email, $hashedPassword, $role, $is_actif]);
-        } catch (PDOException $e) {
-            return false;
-        }
+    public function createUser() {
+        $db = Database::connect();
+        $stmt = $db->prepare("INSERT INTO utilisateurs (nom, prenom, email, mot_de_passe, role, is_actif) VALUES (?, ?, ?, ?, ?, ?)");
+        return $stmt->execute([
+            $this->nom,
+            $this->prenom,
+            $this->email,
+            $this->mot_de_passe,
+            $this->role,
+            $this->is_actif
+        ]);
     }
 }
