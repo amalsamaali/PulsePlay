@@ -131,11 +131,13 @@
                 <input type="password" id="confirm_mot_de_passe" name="confirm_mot_de_passe" required>
             </div>
             <div class="form-group">
-                <label for="role">Je suis</label>
-                <select id="role" name="role">
-                    <option value="adherent">Adhérent</option>
-                    <option value="entraineur">Entraîneur</option>
-                </select>
+               <label for="role">Rôle :</label>
+               <select name="role" id="role" required>
+                   <option value="">-- Sélectionnez un rôle --</option>
+                   <option value="admin">Admin</option>
+                   <option value="entraineur">Entraîneur</option>
+                   <option value="adherent">Adhérent</option>
+               </select>
             </div>
             <button type="submit">S'inscrire</button>
             <div class="message" id="signupMessage"></div>

@@ -1,5 +1,6 @@
 <?php
 require_once '../models/UtilisateurModel.php';
+require_once __DIR__ . '/../config.php';
 
 class UtilisateurController {
 
@@ -16,7 +17,7 @@ class UtilisateurController {
             $_SESSION['user'] = $user;
 
             $redirect = match($user['role']) {
-                'admin' => '/PulsePlay/view/front/dashbeordAdmin.php',
+                'admin' => '/PulsePlay/view/back/dashbordAdmin.php',
                 'entraineur' => '/PulsePlay/entraineur/planning.php',
                 'adherent' => '/PulsePlay/adherent/activites.php',
                 default => '/PulsePlay/index.php'

@@ -722,7 +722,7 @@
     <div class="modal-content">
         <button id="closeLogin" title="Fermer la fenêtre">×</button>
         <h2>Connexion</h2>
-        <form id="loginForm" autocomplete="off">
+        <form id="loginForm" action="../../controller/login_controller.php" method="POST" autocomplete="off">
             <div class="form-group">
                 <input type="email" name="email" placeholder="Email" required />
             </div>
@@ -758,6 +758,7 @@
                     <option value="">-- Choisir un rôle --</option>
                     <option value="adherent">Adhérent</option>
                     <option value="entraineur">Entraîneur</option>
+                    <option value="admin">Admin</option>
                 </select>
             </div>
             <div class="form-group">
