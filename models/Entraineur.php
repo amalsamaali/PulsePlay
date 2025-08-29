@@ -2,7 +2,6 @@
 // models/Entraineur.php
 
 class Entraineur {
-  
     private $id;
     private $nom;
     private $prenom;
@@ -24,7 +23,7 @@ class Entraineur {
     }
 
     // ================== GETTERS ==================
-       public function getId() {
+    public function getId() {
         return $this->id;
     }
 

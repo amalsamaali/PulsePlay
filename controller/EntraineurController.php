@@ -16,7 +16,7 @@ class EntraineurController {
         }
     }
 
-    // ================== RÉCUPÉRER TOUS LES ENTRAÎNEURS ==================
+    // ================== RÉCUPÉRER TOUS LES ADHÉRENTS ==================
     public function getAllEntraineurs() {
         try {
             return $this->dao->getAllEntraineurs();
@@ -49,10 +49,10 @@ class EntraineurController {
         }
     }
 
-    // ================== CRÉER ENTRAÎNEUR ==================
+    // ================== CRÉER ADHÉRENT ==================
     public function createEntraineur($data) {
         try {
-           // Validation des données requises
+            // Validation des données requises
             $requiredFields = ['nom', 'prenom', 'email', 'mot_de_passe'];
             foreach ($requiredFields as $field) {
                 if (empty($data[$field]) || trim($data[$field]) === '') {
@@ -74,7 +74,8 @@ class EntraineurController {
             if ($this->dao->emailExists($data['email'])) {
                 return ['success' => false, 'message' => 'Cet email est déjà utilisé'];
             }
-             // Nettoyer et préparer les données
+
+            // Nettoyer et préparer les données
             $cleanData = [
                 'nom' => trim(ucwords(strtolower($data['nom']))),
                 'prenom' => trim(ucwords(strtolower($data['prenom']))),
@@ -86,18 +87,18 @@ class EntraineurController {
             $entraineur = new Entraineur($cleanData);
 
             if ($this->dao->create($entraineur)) {
-                return ['success' => true, 'message' => 'Adhérent créé avec succès'];
+                return ['success' => true, 'message' => 'Entraîneur créé avec succès'];
             } else {
-                return ['success' => false, 'message' => 'Erreur lors de la création de l\'adhérent'];
+                return ['success' => false, 'message' => 'Erreur lors de la création de l\'entraîneur'];
             }
 
         } catch (Exception $e) {
-            error_log("Erreur createAdherent: " . $e->getMessage());
+            error_log("Erreur createEntraineur: " . $e->getMessage());
             return ['success' => false, 'message' => 'Erreur serveur lors de la création'];
         }
     }
 
-    // ================== MODIFIER ENTRAÎNEUR ==================
+    // ================== MODIFIER ADHÉRENT ==================
     public function updateEntraineur($data) {
         try {
             // Validation des données requises
@@ -144,20 +145,19 @@ class EntraineurController {
 
             $entraineur = new Entraineur($cleanData);
 
-            if ($this->dao->update($entraineur)) {
-                return ['success' => true, 'message' => 'Adhérent mis à jour avec succès'];
-            } else {
-                return ['success' => false, 'message' => 'Erreur lors de la mise à jour de l\'adhérent'];
-            }
+          if ($this->dao->update($entraineur)) {
+    return ['success' => true, 'message' => 'Entraîneur mis à jour avec succès'];
+} else {
+    return ['success' => false, 'message' => 'Erreur lors de la mise à jour de l\'entraîneur'];
+}
 
         } catch (Exception $e) {
-            error_log("Erreur updateAdherent: " . $e->getMessage());
+            error_log("Erreur updateEntraineur: " . $e->getMessage());
             return ['success' => false, 'message' => 'Erreur serveur lors de la mise à jour'];
         }
     }
 
-
-    // ================== SUPPRIMER ENTRAÎNEUR ==================
+    // ================== SUPPRIMER ADHÉRENT ==================
     public function deleteEntraineur($id) {
         try {
             if (empty($id) || !is_numeric($id) || $id <= 0) {
@@ -166,16 +166,16 @@ class EntraineurController {
 
             $id = (int)$id;
 
-            // Vérifier si l'entraîneur existe
+            // Vérifier si l'adhérent existe
             $entraineur = $this->dao->getById($id);
             if (!$entraineur) {
-                return ['success' => false, 'message' => 'Entraîneur non trouvé'];
+                return ['success' => false, 'message' => 'Adhérent non trouvé'];
             }
 
             if ($this->dao->delete($id)) {
-                return ['success' => true, 'message' => 'Entraîneur supprimé avec succès'];
+                return ['success' => true, 'message' => 'Adhérent supprimé avec succès'];
             } else {
-                return ['success' => false, 'message' => 'Erreur lors de la suppression de l\'entraîneur'];
+                return ['success' => false, 'message' => 'Erreur lors de la suppression de l\'adhérent'];
             }
 
         } catch (Exception $e) {
@@ -184,7 +184,7 @@ class EntraineurController {
         }
     }
 
-    // ================== RECHERCHER ENTRAÎNEURS ==================
+    // ================== RECHERCHER ADHÉRENTS ==================
     public function searchEntraineurs($keyword) {
         try {
             if (empty($keyword) || trim($keyword) === '') {
@@ -197,28 +197,14 @@ class EntraineurController {
         }
     }
 
-    // ================== RECHERCHER PAR SPÉCIALITÉ ==================
-    public function getEntraineursBySpecialite($specialite) {
-        try {
-            if (empty($specialite) || trim($specialite) === '') {
-                return [];
-            }
-            return $this->dao->getBySpecialite(trim($specialite));
-        } catch (Exception $e) {
-            error_log("Erreur getEntraineursBySpecialite: " . $e->getMessage());
-            return [];
-        }
-    }
-
     // ================== EXPORTER CSV ==================
     public function exportCSV() {
         try {
             $entraineurs = $this->getAllEntraineurs();
             
-          
             // Headers pour le téléchargement
             header('Content-Type: text/csv; charset=utf-8');
-            header('Content-Disposition: attachment; filename="entraineur_' . date('Y-m-d_H-i-s') . '.csv"');
+            header('Content-Disposition: attachment; filename="entraineurs_' . date('Y-m-d_H-i-s') . '.csv"');
             header('Cache-Control: no-cache, must-revalidate');
             header('Expires: Mon, 26 Jul 1997 05:00:00 GMT');
             
@@ -244,7 +230,7 @@ class EntraineurController {
                     $entraineur->getNom(),
                     $entraineur->getPrenom(),
                     $entraineur->getEmail(),
-                    $entraineur->getDateInscription()? 
+                    $entraineur->getDateInscription() ? 
                         date('d/m/Y H:i', strtotime($entraineur->getDateInscription())) : 
                         'Non définie',
                     $entraineur->getIsActif() ? 'Actif' : 'Inactif'
@@ -287,7 +273,7 @@ class EntraineurController {
                     if ($entraineur) {
                         $response = ['success' => true, 'data' => $entraineur];
                     } else {
-                        $response = ['success' => false, 'message' => 'Entraîneur non trouvé'];
+                        $response = ['success' => false, 'message' => 'Adhérent non trouvé'];
                     }
                     break;
 
@@ -322,31 +308,17 @@ class EntraineurController {
                     $response = ['success' => true, 'data' => $data];
                     break;
 
-                case 'search_by_specialite':
-                    $specialite = $_POST['specialite'] ?? '';
-                    $entraineurs = $this->getEntraineursBySpecialite($specialite);
-                    
-                    // Convertir en array pour JSON
-                    $data = [];
-                    foreach ($entraineurs as $entraineur) {
-                        $data[] = $entraineur->toArray();
-                    }
-                    
-                    $response = ['success' => true, 'data' => $data];
-                    break;
-
                 case 'export':
                     $this->exportCSV();
                     // Ne pas retourner de JSON pour l'export
                     break;
-
                 case 'check_email':
-                    $email = $_POST['email'] ?? '';
-                    $excludeId = (int)($_POST['exclude_id'] ?? 0);
-        
-                    $exists = $this->dao->emailExists($email, $excludeId ?: null);
-                    $response = ['exists' => $exists];
-                    break;    
+                $email = $_POST['email'] ?? '';
+                $excludeId = (int)($_POST['exclude_id'] ?? 0);
+    
+                $exists = $this->dao->emailExists($email, $excludeId ?: null);
+                $response = ['exists' => $exists];
+                break;    
            
                 default:
                     $response = ['success' => false, 'message' => 'Action non supportée: ' . $action];
@@ -386,27 +358,5 @@ class EntraineurController {
             }
         }
         return $sanitized;
-    }
-
-    // ================== MÉTHODES SPÉCIFIQUES AUX ENTRAÎNEURS ==================
-    
-    // Obtenir la liste des spécialités disponibles
-    public function getSpecialites() {
-        try {
-            return $this->dao->getAllSpecialites();
-        } catch (Exception $e) {
-            error_log("Erreur getSpecialites: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    // Obtenir les entraîneurs les plus expérimentés
-    public function getTopEntraineurs($limit = 5) {
-        try {
-            return $this->dao->getTopByExperience($limit);
-        } catch (Exception $e) {
-            error_log("Erreur getTopEntraineurs: " . $e->getMessage());
-            return [];
-        }
     }
 }

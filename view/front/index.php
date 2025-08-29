@@ -758,7 +758,7 @@
                     <option value="">-- Choisir un rôle --</option>
                     <option value="adherent">Adhérent</option>
                     <option value="entraineur">Entraîneur</option>
-                    <option value="admin">Admin</option>
+                   
                 </select>
             </div>
             <div class="form-group">

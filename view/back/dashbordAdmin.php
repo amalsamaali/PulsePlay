@@ -9,7 +9,24 @@ $initiales = strtoupper(substr($user['prenom'], 0, 1) . substr($user['nom'], 0, 
 // Initialiser les contrôleurs
 require_once __DIR__ . '/../../controller/AdherentController.php';
 $adherentController = new AdherentController();
+require_once __DIR__ . '/../../controller/EntraineurController.php';
+$entraineurController = new EntraineurController();
 
+// Modifier la section de gestion des requêtes AJAX pour inclure les entraîneurs
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
+    // Vérifier si c'est pour les entraîneurs
+    if (isset($_POST['entity']) && $_POST['entity'] === 'entraineur') {
+        $entraineurController->handleAjaxRequest();
+    } else {
+        // Par défaut, traiter comme adhérent
+        $adherentController->handleAjaxRequest();
+    }
+    exit;
+}
+
+// Récupérer les données pour les entraîneurs
+$entraineurs = $entraineurController->getAllEntraineurs();
+$statsEntraineurs = $entraineurController->getEntraineurStats();
 
 // Gérer les requêtes AJAX
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
@@ -725,6 +742,7 @@ $stats = $adherentController->getAdherentStats();
 
         <!-- Main Content -->
         <main class="main-content">
+    <div>
             <!-- Section Adhérents -->
             <div id="adherents" class="section active">
                 <div class="section-header">
@@ -859,7 +877,639 @@ $stats = $adherentController->getAdherentStats();
                         </tbody>
                     </table>
                 </div>
-            <!-- Autres sections... -->
+   </div>             
+     <div>       
+            <!-- Section Entraîneurs -->
+            <div id="entraineurs" class="section">
+                <div class="section-header">
+                    <h2 class="section-title">Gestion des Entraîneurs</h2>
+                    <div style="display: flex; gap: 1rem;">
+                        <button onclick="createEntraineur()" class="add-btn">
+                            ➕ Ajouter un entraîneur
+                        </button>
+                        <button onclick="exportEntraineurs()" class="add-btn" style="background: linear-gradient(45deg, #00b4d8, #0077b6);">
+                            📊 Exporter CSV
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Statistiques Entraîneurs -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon">👨‍🏫</div>
+                        </div>
+                        <div class="stat-number" id="stat-total-entraineurs"><?php echo $statsEntraineurs['total']; ?></div>
+                        <div class="stat-label">Total Entraîneurs</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon">✅</div>
+                        </div>
+                        <div class="stat-number" id="stat-actifs-entraineurs"><?php echo $statsEntraineurs['actifs']; ?></div>
+                        <div class="stat-label">Comptes Actifs</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon">❌</div>
+                        </div>
+                        <div class="stat-number" id="stat-inactifs-entraineurs"><?php echo $statsEntraineurs['inactifs']; ?></div>
+                        <div class="stat-label">Comptes Inactifs</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon">📈</div>
+                        </div>
+                        <div class="stat-number"><?php echo round($statsEntraineurs['total'] > 0 ? ($statsEntraineurs['actifs'] / $statsEntraineurs['total'] * 100) : 0, 1); ?>%</div>
+                        <div class="stat-label">Taux d'activation</div>
+                    </div>
+                </div>
+
+                <!-- Barre de recherche et filtres -->
+                <div class="search-filter-container">
+                    <div class="search-container">
+                        <input type="text" id="searchInputEntraineurs" class="search-input" placeholder="Rechercher par nom, prénom ou email..." oninput="filterEntraineurs()">
+                        <span class="search-icon">🔍</span>
+                    </div>
+                    <select id="statutFilterEntraineurs" class="filter-select" onchange="filterEntraineurs()">
+                        <option value="">📋 Tous les statuts</option>
+                        <option value="actif">✅ Comptes actifs</option>
+                        <option value="inactif">❌ Comptes inactifs</option>
+                    </select>
+                    <div class="result-count">
+                        <span id="resultCountEntraineurs"><?php echo count($entraineurs); ?></span> résultat(s)
+                    </div>
+                </div>
+
+                <!-- Tableau des entraîneurs -->
+                <div class="table-container">
+                    <table id="entraineursTable">
+                        <thead>
+                            <tr>
+                                <th onclick="sortTableEntraineurs(0)">👤 Nom <span id="sort-entraineurs-0">↕️</span></th>
+                                <th onclick="sortTableEntraineurs(1)">👤 Prénom <span id="sort-entraineurs-1">↕️</span></th>
+                                <th onclick="sortTableEntraineurs(2)">📧 Email <span id="sort-entraineurs-2">↕️</span></th>
+                                <th onclick="sortTableEntraineurs(3)">📅 Date inscription <span id="sort-entraineurs-3">↕️</span></th>
+                                <th onclick="sortTableEntraineurs(4)">🔄 Statut <span id="sort-entraineurs-4">↕️</span></th>
+                                <th style="width: 200px;">⚙️ Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="entraineursTableBody">
+                            <?php if (empty($entraineurs)): ?>
+                            <tr>
+                                <td colspan="6" style="text-align: center; padding: 3rem; color: #b8b8b8;">
+                                    <div style="font-size: 3rem; margin-bottom: 1rem;">😔</div>
+                                    <div style="font-size: 1.2rem; margin-bottom: 0.5rem;">Aucun entraîneur trouvé</div>
+                                    <div style="font-size: 0.9rem;">Commencez par ajouter votre premier entraîneur !</div>
+                                </td>
+                            </tr>
+                            <?php else: ?>
+                            <?php foreach ($entraineurs as $entraineur): ?>
+                            <tr data-id="<?php echo $entraineur->getId(); ?>">
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(45deg, #00d4aa, #00b4d8); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.8rem;">
+                                            <?php echo $entraineur->getInitiales(); ?>
+                                        </div>
+                                        <span><?php echo htmlspecialchars($entraineur->getNom()); ?></span>
+                                    </div>
+                                </td>
+                                <td><?php echo htmlspecialchars($entraineur->getPrenom()); ?></td>
+                                <td>
+                                    <a href="mailto:<?php echo htmlspecialchars($entraineur->getEmail()); ?>" style="color: #00d4aa; text-decoration: none;">
+                                        <?php echo htmlspecialchars($entraineur->getEmail()); ?>
+                                    </a>
+                                </td>
+                                <td>
+                                    <?php 
+                                    if (!empty($entraineur->getDateInscription())) {
+                                        echo date('d/m/Y', strtotime($entraineur->getDateInscription()));
+                                    } else {
+                                        echo '<span style="color: #b8b8b8;">-</span>';
+                                    }
+                                    ?>
+                                </td>
+                                <td>
+                                    <span class="statut-badge <?php echo $entraineur->getIsActif() ? 'statut-admin' : 'statut-user'; ?>">
+                                        <?php echo $entraineur->getIsActif() ? '✅ Actif' : '❌ Inactif'; ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button onclick="viewEntraineur(<?php echo $entraineur->getId(); ?>)" class="btn-view" title="Voir les détails">
+                                            👁️ Voir
+                                        </button>
+                                        <button onclick="editEntraineur(<?php echo $entraineur->getId(); ?>)" class="btn-edit" title="Modifier">
+                                            ✏️ Modifier
+                                        </button>
+                                        <button onclick="deleteEntraineur(<?php echo $entraineur->getId(); ?>)" class="btn-delete" title="Supprimer">
+                                            🗑️ Supprimer
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+<!-- ============= FONCTIONS JAVASCRIPT À AJOUTER DANS LA SECTION SCRIPT ============= -->
+
+<script>
+// ================== VARIABLES GLOBALES ENTRAÎNEURS ==================
+let currentSortColumnEntraineurs = -1;
+let isAscendingEntraineurs = true;
+
+// ================== CRUD ENTRAÎNEURS ==================
+function createEntraineur() {
+    const modalContent = `
+        <form id="createEntraineurForm" novalidate>
+            <input type="hidden" name="entity" value="entraineur">
+            <div class="form-group">
+                <label class="form-label">Prénom *</label>
+                <input type="text" name="prenom" class="form-input" required autocomplete="given-name">
+                <div class="error-message"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Nom *</label>
+                <input type="text" name="nom" class="form-input" required autocomplete="family-name">
+                <div class="error-message"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email *</label>
+                <input type="email" name="email" class="form-input" required autocomplete="email">
+                <div class="error-message"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Mot de passe *</label>
+                <input type="password" name="mot_de_passe" class="form-input" required autocomplete="new-password">
+                <div class="error-message"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Statut</label>
+                <select name="is_actif" class="form-select">
+                    <option value="1">Actif</option>
+                    <option value="0">Inactif</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn-cancel" onclick="closeModal()">Annuler</button>
+                <button type="submit" class="btn-save">
+                    <div class="loading-spinner"></div>
+                    Créer l'entraîneur
+                </button>
+            </div>
+        </form>
+    `;
+
+    createModal('Nouvel Entraîneur', modalContent);
+
+    // Configuration du formulaire
+    setupFormValidation('createEntraineurForm', saveEntraineur);
+}
+
+function editEntraineur(id) {
+    const button = document.querySelector(`[onclick="editEntraineur(${id})"]`);
+    showLoading(button);
+    
+    fetch(window.location.href, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `ajax=1&entity=entraineur&action=get&id=${id}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading(button);
+        
+        if (data.success && data.data) {
+            const entraineur = data.data;
+            const modalContent = `
+                <form id="editEntraineurForm" novalidate>
+                    <input type="hidden" name="entity" value="entraineur">
+                    <input type="hidden" name="id" value="${entraineur.id}">
+                    <div class="form-group">
+                        <label class="form-label">Prénom *</label>
+                        <input type="text" name="prenom" class="form-input" value="${entraineur.prenom}" required>
+                        <div class="error-message"></div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Nom *</label>
+                        <input type="text" name="nom" class="form-input" value="${entraineur.nom}" required>
+                        <div class="error-message"></div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Email *</label>
+                        <input type="email" name="email" class="form-input" value="${entraineur.email}" required>
+                        <div class="error-message"></div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Nouveau mot de passe (laisser vide pour ne pas modifier)</label>
+                        <input type="password" name="mot_de_passe" class="form-input">
+                        <div class="error-message"></div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Statut</label>
+                        <select name="is_actif" class="form-select">
+                            <option value="1" ${entraineur.is_actif == 1 ? 'selected' : ''}>Actif</option>
+                            <option value="0" ${entraineur.is_actif == 0 ? 'selected' : ''}>Inactif</option>
+                        </select>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn-cancel" onclick="closeModal()">Annuler</button>
+                        <button type="submit" class="btn-save">
+                            <div class="loading-spinner"></div>
+                            Sauvegarder
+                        </button>
+                    </div>
+                </form>
+            `;
+
+            createModal('Modifier l\'Entraîneur', modalContent);
+            setupFormValidation('editEntraineurForm', updateEntraineur);
+        } else {
+            showNotification('Erreur lors de la récupération des données', 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading(button);
+        console.error('Erreur:', error);
+        showNotification('Erreur de connexion', 'error');
+    });
+}
+
+function viewEntraineur(id) {
+    const button = document.querySelector(`[onclick="viewEntraineur(${id})"]`);
+    showLoading(button);
+    
+    fetch(window.location.href, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `ajax=1&entity=entraineur&action=get&id=${id}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading(button);
+        
+        if (data.success && data.data) {
+            const entraineur = data.data;
+            const modalContent = `
+                <div style="padding: 1rem;">
+                    <div style="text-align: center; margin-bottom: 2rem;">
+                        <div style="width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(45deg, #00d4aa, #00b4d8); display: inline-flex; align-items: center; justify-content: center; font-weight: bold; font-size: 2rem; margin-bottom: 1rem;">
+                            ${entraineur.prenom.charAt(0).toUpperCase()}${entraineur.nom.charAt(0).toUpperCase()}
+                        </div>
+                        <h3 style="color: #00d4aa; margin: 0;">👨‍🏫 ${entraineur.prenom} ${entraineur.nom}</h3>
+                        <p style="color: #b8b8b8; margin: 0.5rem 0;">Entraîneur</p>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                        <div style="background: rgba(15, 15, 35, 0.5); padding: 1rem; border-radius: 8px;">
+                            <strong style="color: #00d4aa;">ID:</strong><br>
+                            <span>${entraineur.id}</span>
+                        </div>
+                        <div style="background: rgba(15, 15, 35, 0.5); padding: 1rem; border-radius: 8px;">
+                            <strong style="color: #00d4aa;">Email:</strong><br>
+                            <a href="mailto:${entraineur.email}" style="color: #00b4d8;">${entraineur.email}</a>
+                        </div>
+                        <div style="background: rgba(15, 15, 35, 0.5); padding: 1rem; border-radius: 8px;">
+                            <strong style="color: #00d4aa;">Statut:</strong><br>
+                            <span class="statut-badge ${entraineur.is_actif == 1 ? 'statut-active' : 'statut-inactive'}">
+                                ${entraineur.is_actif == 1 ? 'Actif' : 'Inactif'}
+                            </span>
+                        </div>
+                        <div style="background: rgba(15, 15, 35, 0.5); padding: 1rem; border-radius: 8px;">
+                            <strong style="color: #00d4aa;">Date d'inscription:</strong><br>
+                            <span>${entraineur.date_inscription ? new Date(entraineur.date_inscription).toLocaleDateString('fr-FR') : 'Non définie'}</span>
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: center; margin-top: 2rem;">
+                        <button type="button" class="btn-save" onclick="editEntraineur(${entraineur.id}); closeModal();" style="margin-right: 1rem;">
+                            Modifier
+                        </button>
+                        <button type="button" class="btn-cancel" onclick="closeModal()">
+                            Fermer
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            createModal('Détails de l\'Entraîneur', modalContent);
+        } else {
+            showNotification('Entraîneur non trouvé', 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading(button);
+        console.error('Erreur:', error);
+        showNotification('Erreur de connexion', 'error');
+    });
+}
+
+function deleteEntraineur(id) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer cet entraîneur ?\n\nCette action est irréversible !')) {
+        const button = document.querySelector(`[onclick="deleteEntraineur(${id})"]`);
+        showLoading(button);
+        
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `ajax=1&entity=entraineur&action=delete&id=${id}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading(button);
+            
+            if (data.success) {
+                showNotification(data.message || 'Entraîneur supprimé avec succès', 'success');
+                
+                const row = document.querySelector(`#entraineursTable tr[data-id="${id}"]`);
+                if (row) {
+                    row.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                    row.style.opacity = '0';
+                    row.style.transform = 'translateX(-20px)';
+                    setTimeout(() => {
+                        row.remove();
+                        updateResultCountEntraineurs();
+                        refreshStatsEntraineurs();
+                    }, 300);
+                }
+            } else {
+                showNotification(data.message || 'Erreur lors de la suppression', 'error');
+            }
+        })
+        .catch(error => {
+            hideLoading(button);
+            console.error('Erreur:', error);
+            showNotification('Erreur de connexion', 'error');
+        });
+    }
+}
+
+function saveEntraineur() {
+    const form = document.getElementById('createEntraineurForm');
+    const submitBtn = form.querySelector('.btn-save');
+    showLoading(submitBtn);
+
+    const formData = new FormData(form);
+    formData.append('ajax', '1');
+    formData.append('action', 'create');
+
+    fetch(window.location.href, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading(submitBtn);
+        
+        if (data.success) {
+            showNotification(data.message || 'Entraîneur créé avec succès', 'success');
+            closeModal();
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showNotification(data.message || 'Erreur lors de la création', 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading(submitBtn);
+        console.error('Erreur:', error);
+        showNotification('Erreur de connexion', 'error');
+    });
+}
+
+function updateEntraineur() {
+    const form = document.getElementById('editEntraineurForm');
+    const submitBtn = form.querySelector('.btn-save');
+    showLoading(submitBtn);
+
+    const formData = new FormData(form);
+    formData.append('ajax', '1');
+    formData.append('action', 'update');
+
+    fetch(window.location.href, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading(submitBtn);
+        
+        if (data.success) {
+            showNotification(data.message || 'Entraîneur mis à jour avec succès', 'success');
+            closeModal();
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showNotification(data.message || 'Erreur lors de la mise à jour', 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading(submitBtn);
+        console.error('Erreur:', error);
+        showNotification('Erreur de connexion', 'error');
+    });
+}
+
+// ================== FONCTIONS UTILITAIRES ENTRAÎNEURS ==================
+function filterEntraineurs() {
+    const searchTerm = document.getElementById('searchInputEntraineurs')?.value.toLowerCase() || '';
+    const statutValue = document.getElementById('statutFilterEntraineurs')?.value.toLowerCase() || '';
+    const rows = document.querySelectorAll('#entraineursTable tbody tr[data-id]');
+    let visibleCount = 0;
+
+    rows.forEach(row => {
+        const nom = row.cells[0].textContent.toLowerCase();
+        const prenom = row.cells[1].textContent.toLowerCase();
+        const email = row.cells[2].textContent.toLowerCase();
+        const statut = row.cells[4].textContent.toLowerCase();
+
+        const matchesSearch = searchTerm === '' || 
+            nom.includes(searchTerm) || 
+            prenom.includes(searchTerm) || 
+            email.includes(searchTerm);
+
+        const matchesStatus = statutValue === '' || 
+            (statutValue === 'actif' && statut.includes('actif')) ||
+            (statutValue === 'inactif' && statut.includes('inactif'));
+
+        if (matchesSearch && matchesStatus) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    updateResultCountEntraineurs(visibleCount);
+}
+
+function updateResultCountEntraineurs(count) {
+    if (count === undefined) {
+        const visibleRows = document.querySelectorAll('#entraineursTable tbody tr[data-id]');
+        count = Array.from(visibleRows).filter(row => row.style.display !== 'none').length;
+    }
+    
+    const resultCount = document.getElementById('resultCountEntraineurs');
+    if (resultCount) {
+        resultCount.textContent = count;
+    }
+}
+
+function exportEntraineurs() {
+    showNotification('Export en cours...', 'info');
+    
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = window.location.href;
+    
+    const ajaxInput = document.createElement('input');
+    ajaxInput.type = 'hidden';
+    ajaxInput.name = 'ajax';
+    ajaxInput.value = '1';
+    
+    const entityInput = document.createElement('input');
+    entityInput.type = 'hidden';
+    entityInput.name = 'entity';
+    entityInput.value = 'entraineur';
+    
+    const actionInput = document.createElement('input');
+    actionInput.type = 'hidden';
+    actionInput.name = 'action';
+    actionInput.value = 'export';
+    
+    form.appendChild(ajaxInput);
+    form.appendChild(entityInput);
+    form.appendChild(actionInput);
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+    
+    setTimeout(() => {
+        showNotification('Export terminé !', 'success');
+    }, 1500);
+}
+
+function refreshStatsEntraineurs() {
+    fetch(window.location.href, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'ajax=1&entity=entraineur&action=stats'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const stats = data.data;
+            document.getElementById('stat-total-entraineurs').textContent = stats.total;
+            document.getElementById('stat-actifs-entraineurs').textContent = stats.actifs;
+            document.getElementById('stat-inactifs-entraineurs').textContent = stats.inactifs;
+        }
+    })
+    .catch(error => console.error('Erreur refresh stats:', error));
+}
+
+function sortTableEntraineurs(columnIndex) {
+    const table = document.getElementById('entraineursTable');
+    if (!table) return;
+    
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
+
+    if (currentSortColumnEntraineurs === columnIndex) {
+        isAscendingEntraineurs = !isAscendingEntraineurs;
+    } else {
+        isAscendingEntraineurs = true;
+        currentSortColumnEntraineurs = columnIndex;
+    }
+
+    // Réinitialiser les indicateurs
+    for (let i = 0; i <= 4; i++) {
+        const sortIndicator = document.getElementById(`sort-entraineurs-${i}`);
+        if (sortIndicator) {
+            sortIndicator.textContent = '↕️';
+            sortIndicator.style.color = '#b8b8b8';
+        }
+    }
+
+    // Mettre à jour l'indicateur actif
+    const activeSortIndicator = document.getElementById(`sort-entraineurs-${columnIndex}`);
+    if (activeSortIndicator) {
+        activeSortIndicator.textContent = isAscendingEntraineurs ? '🔼' : '🔽';
+        activeSortIndicator.style.color = '#00d4aa';
+    }
+
+    rows.sort((a, b) => {
+        let aValue = a.cells[columnIndex].textContent.trim();
+        let bValue = b.cells[columnIndex].textContent.trim();
+
+        if (columnIndex === 3) { // Date
+            const parseDate = (dateStr) => {
+                if (dateStr === '-') return new Date(0);
+                const parts = dateStr.split('/');
+                if (parts.length === 3) {
+                    return new Date(parts[2], parts[1] - 1, parts[0]);
+                }
+                return new Date(dateStr);
+            };
+            aValue = parseDate(aValue);
+            bValue = parseDate(bValue);
+            const result = aValue - bValue;
+            return isAscendingEntraineurs ? result : -result;
+        }
+
+        const result = aValue.localeCompare(bValue, 'fr', { numeric: true });
+        return isAscendingEntraineurs ? result : -result;
+    });
+
+    rows.forEach(row => tbody.appendChild(row));
+}
+
+// ================== FONCTION UTILITAIRE POUR LA VALIDATION ==================
+function setupFormValidation(formId, submitCallback) {
+    const form = document.getElementById(formId);
+    const fields = form.querySelectorAll('input');
+
+    // Validation en temps réel
+    fields.forEach(field => {
+        field.addEventListener('blur', function() {
+            validateField(this);
+        });
+        
+        field.addEventListener('input', function() {
+            if (this.classList.contains('error')) {
+                validateField(this);
+            }
+        });
+    });
+
+    // Gestion de la soumission
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (validateForm(formId)) {
+            submitCallback();
+        }
+    });
+
+    // Focus sur le premier champ
+    setTimeout(() => {
+        const firstInput = form.querySelector('input:not([type="hidden"])');
+        if (firstInput) firstInput.focus();
+    }, 100);
+}
+</script>
 
 
 

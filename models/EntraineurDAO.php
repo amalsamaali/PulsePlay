@@ -20,13 +20,14 @@ class EntraineurDAO {
         }
     }
 
-    // ================== RÉCUPÉRER TOUS LES ENTRAÎNEURS ==================
+
+    // ================== RÉCUPÉRER TOUS LES ADHÉRENTS ==================
     public function getAllEntraineurs() {
         try {
             $stmt = $this->pdo->prepare("
-                SELECT id, nom, prenom, email, telephone, specialite, experience, 
-                       diplomes, date_embauche, is_actif 
-                FROM entraineurs 
+                SELECT id, nom, prenom, email, date_inscription, is_actif 
+                FROM utilisateurs 
+                WHERE role = 'entraineur' 
                 ORDER BY nom ASC, prenom ASC
             ");
             $stmt->execute();
@@ -48,10 +49,9 @@ class EntraineurDAO {
     public function getById($id) {
         try {
             $stmt = $this->pdo->prepare("
-                SELECT id, nom, prenom, email, telephone, specialite, experience, 
-                       diplomes, date_embauche, is_actif 
-                FROM entraineurs 
-                WHERE id = ?
+                SELECT id, nom, prenom, email, date_inscription, is_actif 
+                FROM utilisateurs 
+                WHERE id = ? AND role = 'entraineur'
             ");
             $stmt->execute([$id]);
             $result = $stmt->fetch();
@@ -67,12 +67,12 @@ class EntraineurDAO {
         }
     }
 
-    // ================== CRÉER ENTRAÎNEUR ==================
+    // ================== CRÉER ADHÉRENT ==================
     public function create(Entraineur $entraineur) {
-       try {
+        try {
             $stmt = $this->pdo->prepare("
                 INSERT INTO utilisateurs (nom, prenom, email, mot_de_passe, role, is_actif, date_inscription) 
-                VALUES (?, ?, ?, ?, 'adherent', ?, NOW())
+                VALUES (?, ?, ?, ?, 'entraineur', ?, NOW())
             ");
             
             $hashedPassword = password_hash($entraineur->getMotDePasse(), PASSWORD_DEFAULT);
@@ -92,15 +92,15 @@ class EntraineurDAO {
         }
     }
 
-    // ================== MODIFIER ENTRAÎNEUR ==================
+    // ================== MODIFIER ADHÉRENT ==================
     public function update(Entraineur $entraineur) {
-         try {
+        try {
             // Si mot de passe fourni, l'inclure dans la mise à jour
             if ($entraineur->getMotDePasse()) {
                 $stmt = $this->pdo->prepare("
                     UPDATE utilisateurs 
                     SET nom = ?, prenom = ?, email = ?, mot_de_passe = ?, is_actif = ?
-                    WHERE id = ? AND role = 'adherent'
+                    WHERE id = ? AND role = 'entraineur'
                 ");
                 
                 $hashedPassword = password_hash($entraineur->getMotDePasse(), PASSWORD_DEFAULT);
@@ -118,7 +118,7 @@ class EntraineurDAO {
                 $stmt = $this->pdo->prepare("
                     UPDATE utilisateurs 
                     SET nom = ?, prenom = ?, email = ?, is_actif = ?
-                    WHERE id = ? AND role = 'adherent'
+                    WHERE id = ? AND role = 'entraineur'
                 ");
                 
                 $result = $stmt->execute([
@@ -137,13 +137,13 @@ class EntraineurDAO {
         }
     }
 
-    // ================== SUPPRIMER ENTRAÎNEUR ==================
+    // ================== SUPPRIMER ADHÉRENT ==================
     public function delete($id) {
         try {
-            // Vérifier d'abord si l'entraîneur existe
+            // Vérifier d'abord si l'adhérent existe et est bien un adhérent
             $stmt = $this->pdo->prepare("
-                SELECT id FROM entraineurs 
-                WHERE id = ?
+                SELECT id FROM utilisateurs 
+                WHERE id = ? AND role = 'entraineur'
             ");
             $stmt->execute([$id]);
             
@@ -151,10 +151,10 @@ class EntraineurDAO {
                 return false;
             }
             
-            // Supprimer l'entraîneur
+            // Supprimer l'adhérent
             $stmt = $this->pdo->prepare("
-                DELETE FROM entraineurs 
-                WHERE id = ?
+                DELETE FROM utilisateurs 
+                WHERE id = ? AND role = 'entraineur'
             ");
             
             return $stmt->execute([$id]);
@@ -171,10 +171,9 @@ class EntraineurDAO {
                 SELECT 
                     COUNT(*) as total,
                     SUM(CASE WHEN is_actif = 1 THEN 1 ELSE 0 END) as actifs,
-                    SUM(CASE WHEN is_actif = 0 THEN 1 ELSE 0 END) as inactifs,
-                    AVG(experience) as experience_moyenne,
-                    COUNT(DISTINCT specialite) as nb_specialites
-                FROM entraineurs
+                    SUM(CASE WHEN is_actif = 0 THEN 1 ELSE 0 END) as inactifs
+                FROM utilisateurs 
+                WHERE role = 'entraineur'
             ");
             $stmt->execute();
             $result = $stmt->fetch();
@@ -182,19 +181,11 @@ class EntraineurDAO {
             return [
                 'total' => (int)$result['total'],
                 'actifs' => (int)$result['actifs'],
-                'inactifs' => (int)$result['inactifs'],
-                'experience_moyenne' => round((float)$result['experience_moyenne'], 1),
-                'nb_specialites' => (int)$result['nb_specialites']
+                'inactifs' => (int)$result['inactifs']
             ];
         } catch (PDOException $e) {
             error_log("Erreur getStats: " . $e->getMessage());
-            return [
-                'total' => 0, 
-                'actifs' => 0, 
-                'inactifs' => 0, 
-                'experience_moyenne' => 0, 
-                'nb_specialites' => 0
-            ];
+            return ['total' => 0, 'actifs' => 0, 'inactifs' => 0];
         }
     }
 
@@ -203,13 +194,13 @@ class EntraineurDAO {
         try {
             if ($excludeId) {
                 $stmt = $this->pdo->prepare("
-                    SELECT id FROM entraineurs 
+                    SELECT id FROM utilisateurs 
                     WHERE email = ? AND id != ?
                 ");
                 $stmt->execute([$email, $excludeId]);
             } else {
                 $stmt = $this->pdo->prepare("
-                    SELECT id FROM entraineurs 
+                    SELECT id FROM utilisateurs 
                     WHERE email = ?
                 ");
                 $stmt->execute([$email]);
@@ -222,18 +213,18 @@ class EntraineurDAO {
         }
     }
 
-    // ================== RECHERCHER ENTRAÎNEURS ==================
+    // ================== RECHERCHER ADHÉRENTS ==================
     public function search($keyword) {
         try {
             $searchTerm = '%' . $keyword . '%';
             $stmt = $this->pdo->prepare("
-                SELECT id, nom, prenom, email, telephone, specialite, experience, 
-                       diplomes, date_embauche, is_actif 
-                FROM entraineurs 
-                WHERE (nom LIKE ? OR prenom LIKE ? OR email LIKE ? OR specialite LIKE ?)
+                SELECT id, nom, prenom, email, date_inscription, is_actif 
+                FROM utilisateurs 
+                WHERE role = 'entraineur' 
+                AND (nom LIKE ? OR prenom LIKE ? OR email LIKE ?)
                 ORDER BY nom ASC, prenom ASC
             ");
-            $stmt->execute([$searchTerm, $searchTerm, $searchTerm, $searchTerm]);
+            $stmt->execute([$searchTerm, $searchTerm, $searchTerm]);
             $results = $stmt->fetchAll();
             
             $entraineurs = [];
@@ -244,205 +235,6 @@ class EntraineurDAO {
             return $entraineurs;
         } catch (PDOException $e) {
             error_log("Erreur search: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    // ================== RECHERCHER PAR SPÉCIALITÉ ==================
-    public function getBySpecialite($specialite) {
-        try {
-            $stmt = $this->pdo->prepare("
-                SELECT id, nom, prenom, email, telephone, specialite, experience, 
-                       diplomes, date_embauche, is_actif 
-                FROM entraineurs 
-                WHERE specialite = ? AND is_actif = 1
-                ORDER BY experience DESC, nom ASC
-            ");
-            $stmt->execute([$specialite]);
-            $results = $stmt->fetchAll();
-            
-            $entraineurs = [];
-            foreach ($results as $row) {
-                $entraineurs[] = new Entraineur($row);
-            }
-            
-            return $entraineurs;
-        } catch (PDOException $e) {
-            error_log("Erreur getBySpecialite: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    // ================== OBTENIR TOUTES LES SPÉCIALITÉS ==================
-    public function getAllSpecialites() {
-        try {
-            $stmt = $this->pdo->prepare("
-                SELECT DISTINCT specialite, COUNT(*) as nb_entraineurs 
-                FROM entraineurs 
-                WHERE is_actif = 1 
-                GROUP BY specialite 
-                ORDER BY specialite ASC
-            ");
-            $stmt->execute();
-            $results = $stmt->fetchAll();
-            
-            $specialites = [];
-            foreach ($results as $row) {
-                $specialites[] = [
-                    'nom' => $row['specialite'],
-                    'nb_entraineurs' => (int)$row['nb_entraineurs']
-                ];
-            }
-            
-            return $specialites;
-        } catch (PDOException $e) {
-            error_log("Erreur getAllSpecialites: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    // ================== TOP ENTRAÎNEURS PAR EXPÉRIENCE ==================
-    public function getTopByExperience($limit = 5) {
-        try {
-            $stmt = $this->pdo->prepare("
-                SELECT id, nom, prenom, email, telephone, specialite, experience, 
-                       diplomes, date_embauche, is_actif 
-                FROM entraineurs 
-                WHERE is_actif = 1 
-                ORDER BY experience DESC, date_embauche ASC 
-                LIMIT ?
-            ");
-            $stmt->execute([$limit]);
-            $results = $stmt->fetchAll();
-            
-            $entraineurs = [];
-            foreach ($results as $row) {
-                $entraineurs[] = new Entraineur($row);
-            }
-            
-            return $entraineurs;
-        } catch (PDOException $e) {
-            error_log("Erreur getTopByExperience: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    // ================== STATISTIQUES PAR SPÉCIALITÉ ==================
-    public function getStatsBySpecialite() {
-        try {
-            $stmt = $this->pdo->prepare("
-                SELECT 
-                    specialite,
-                    COUNT(*) as nb_entraineurs,
-                    AVG(experience) as experience_moyenne,
-                    SUM(CASE WHEN is_actif = 1 THEN 1 ELSE 0 END) as actifs
-                FROM entraineurs 
-                GROUP BY specialite 
-                ORDER BY nb_entraineurs DESC
-            ");
-            $stmt->execute();
-            $results = $stmt->fetchAll();
-            
-            $stats = [];
-            foreach ($results as $row) {
-                $stats[] = [
-                    'specialite' => $row['specialite'],
-                    'nb_entraineurs' => (int)$row['nb_entraineurs'],
-                    'experience_moyenne' => round((float)$row['experience_moyenne'], 1),
-                    'actifs' => (int)$row['actifs']
-                ];
-            }
-            
-            return $stats;
-        } catch (PDOException $e) {
-            error_log("Erreur getStatsBySpecialite: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    // ================== ENTRAÎNEURS RÉCEMMENT EMBAUCHÉS ==================
-    public function getRecentlyHired($limit = 10) {
-        try {
-            $stmt = $this->pdo->prepare("
-                SELECT id, nom, prenom, email, telephone, specialite, experience, 
-                       diplomes, date_embauche, is_actif 
-                FROM entraineurs 
-                WHERE date_embauche >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
-                ORDER BY date_embauche DESC 
-                LIMIT ?
-            ");
-            $stmt->execute([$limit]);
-            $results = $stmt->fetchAll();
-            
-            $entraineurs = [];
-            foreach ($results as $row) {
-                $entraineurs[] = new Entraineur($row);
-            }
-            
-            return $entraineurs;
-        } catch (PDOException $e) {
-            error_log("Erreur getRecentlyHired: " . $e->getMessage());
-            return [];
-        }
-    }
-
-    // ================== VÉRIFIER SI UN TÉLÉPHONE EXISTE ==================
-    public function telephoneExists($telephone, $excludeId = null) {
-        try {
-            if ($excludeId) {
-                $stmt = $this->pdo->prepare("
-                    SELECT id FROM entraineurs 
-                    WHERE telephone = ? AND id != ?
-                ");
-                $stmt->execute([$telephone, $excludeId]);
-            } else {
-                $stmt = $this->pdo->prepare("
-                    SELECT id FROM entraineurs 
-                    WHERE telephone = ?
-                ");
-                $stmt->execute([$telephone]);
-            }
-            
-            return $stmt->fetch() !== false;
-        } catch (PDOException $e) {
-            error_log("Erreur telephoneExists: " . $e->getMessage());
-            return true; // Retourner true par sécurité
-        }
-    }
-
-    // ================== ENTRAÎNEURS PAR NIVEAU D'EXPÉRIENCE ==================
-    public function getByExperienceLevel($minExperience = 0, $maxExperience = null) {
-        try {
-            if ($maxExperience !== null) {
-                $stmt = $this->pdo->prepare("
-                    SELECT id, nom, prenom, email, telephone, specialite, experience, 
-                           diplomes, date_embauche, is_actif 
-                    FROM entraineurs 
-                    WHERE experience >= ? AND experience <= ? AND is_actif = 1
-                    ORDER BY experience DESC, nom ASC
-                ");
-                $stmt->execute([$minExperience, $maxExperience]);
-            } else {
-                $stmt = $this->pdo->prepare("
-                    SELECT id, nom, prenom, email, telephone, specialite, experience, 
-                           diplomes, date_embauche, is_actif 
-                    FROM entraineurs 
-                    WHERE experience >= ? AND is_actif = 1
-                    ORDER BY experience DESC, nom ASC
-                ");
-                $stmt->execute([$minExperience]);
-            }
-            
-            $results = $stmt->fetchAll();
-            
-            $entraineurs = [];
-            foreach ($results as $row) {
-                $entraineurs[] = new Entraineur($row);
-            }
-            
-            return $entraineurs;
-        } catch (PDOException $e) {
-            error_log("Erreur getByExperienceLevel: " . $e->getMessage());
             return [];
         }
     }
