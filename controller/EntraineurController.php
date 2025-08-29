@@ -245,7 +245,7 @@ class EntraineurController {
                     $entraineur->getPrenom(),
                     $entraineur->getEmail(),
                     $entraineur->getDateInscription()? 
-                        date('d/m/Y H:i', strtotime($entraineur->getDateEmbauche())) : 
+                        date('d/m/Y H:i', strtotime($entraineur->getDateInscription())) : 
                         'Non définie',
                     $entraineur->getIsActif() ? 'Actif' : 'Inactif'
                 ], ';');

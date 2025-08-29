@@ -10,6 +10,7 @@ $initiales = strtoupper(substr($user['prenom'], 0, 1) . substr($user['nom'], 0, 
 require_once __DIR__ . '/../../controller/AdherentController.php';
 $adherentController = new AdherentController();
 
+
 // Gérer les requêtes AJAX
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
     $adherentController->handleAjaxRequest();
@@ -369,8 +370,7 @@ $stats = $adherentController->getAdherentStats();
             transition: all 0.3s ease;
             white-space: nowrap;
         }
-
-        .btn-edit {
+.btn-edit {
             background: rgba(0, 180, 216, 0.2);
             color: #00b4d8;
             border: 1px solid rgba(0, 180, 216, 0.3);
@@ -696,8 +696,7 @@ $stats = $adherentController->getAdherentStats();
             </div>
         </div>
     </header>
-
-    <!-- Dashboard Container -->
+     <!-- Dashboard Container -->
     <div class="dashboard-container">
         <!-- Sidebar -->
         <aside class="sidebar">
@@ -1073,8 +1072,7 @@ $stats = $adherentController->getAdherentStats();
                 }, 300);
             }
         }
-
-        // ================== CRUD ADHÉRENTS ==================
+ // ================== CRUD ADHÉRENTS ==================
         function createAdherent() {
             const modalContent = `
                 <form id="createAdherentForm" novalidate>
@@ -1552,8 +1550,7 @@ $stats = $adherentController->getAdherentStats();
                     sortIndicator.style.color = '#b8b8b8';
                 }
             }
-
-            // Mettre à jour l'indicateur actif
+ // Mettre à jour l'indicateur actif
             const activeSortIndicator = document.getElementById(`sort-${columnIndex}`);
             if (activeSortIndicator) {
                 activeSortIndicator.textContent = isAscending ? '🔼' : '🔽';
@@ -1608,4 +1605,4 @@ $stats = $adherentController->getAdherentStats();
     </script>
 </body>
 </html>
-                </div>
+                </div>       
