@@ -58,4 +58,41 @@ class UtilisateurModel {
             $this->is_actif
         ]);
     }
+
+    public function getUserById($id) {
+        $db = Database::connect();
+        $stmt = $db->prepare("SELECT * FROM utilisateurs WHERE id = ?");
+        $stmt->execute([$id]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    public function updateUser($data) {
+        $db = Database::connect();
+        
+        // Construire la requête SQL dynamiquement
+        $sql = "UPDATE utilisateurs SET nom = ?, prenom = ?, email = ?";
+        $params = [$data['nom'], $data['prenom'], $data['email']];
+        
+        // Ajouter le mot de passe si fourni
+        if (isset($data['mot_de_passe'])) {
+            $sql .= ", mot_de_passe = ?";
+            $params[] = $data['mot_de_passe'];
+        }
+        
+        // Ajouter les autres champs si fournis
+        if (isset($data['role'])) {
+            $sql .= ", role = ?";
+            $params[] = $data['role'];
+        }
+        if (isset($data['is_actif'])) {
+            $sql .= ", is_actif = ?";
+            $params[] = $data['is_actif'];
+        }
+        
+        $sql .= " WHERE id = ?";
+        $params[] = $data['id'];
+        
+        $stmt = $db->prepare($sql);
+        return $stmt->execute($params);
+    }
 }

@@ -1,9 +1,23 @@
 <?php 
 require_once '../../config.php';
+
 session_start();
 
-// Récupérer les informations de l'utilisateur admin
+// Vérifier si l'utilisateur est connecté
+if (!isset($_SESSION['user'])) {
+    header('Location: ../front/login.php');
+    exit;
+}
+
+// Vérifier si l'utilisateur a les droits d'accès (admin ou entraineur)
 $user = $_SESSION['user'];
+$allowedRoles = ['admin', 'entraineur'];
+
+if (!in_array($user['role'], $allowedRoles)) {
+    header('Location: ../front/login.php?error=access_denied');
+    exit;
+}
+
 $initiales = strtoupper(substr($user['prenom'], 0, 1) . substr($user['nom'], 0, 1));
 
 // Initialiser les contrôleurs
@@ -11,28 +25,52 @@ require_once __DIR__ . '/../../controller/AdherentController.php';
 $adherentController = new AdherentController();
 require_once __DIR__ . '/../../controller/EntraineurController.php';
 $entraineurController = new EntraineurController();
+require_once __DIR__ . '/../../controller/PlanningController.php';
+$planningController = new PlanningController();
+require_once __DIR__ . '/../../controller/ActiviteSportiveController.php';
+$activiteController = new ActiviteSportiveController();
 
-// Modifier la section de gestion des requêtes AJAX pour inclure les entraîneurs
+// Gérer les requêtes AJAX
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
+    // Vérifier si c'est pour les activités sportives
+    if (isset($_POST['entity']) && $_POST['entity'] === 'activite') {
+        $activiteController->handleAjaxRequest();
+    }
+    // Vérifier si c'est pour les plannings
+    elseif (isset($_POST['entity']) && $_POST['entity'] === 'planning') {
+        $planningController->handleAjaxRequest();
+    } 
     // Vérifier si c'est pour les entraîneurs
-    if (isset($_POST['entity']) && $_POST['entity'] === 'entraineur') {
+    elseif (isset($_POST['entity']) && $_POST['entity'] === 'entraineur') {
         $entraineurController->handleAjaxRequest();
-    } else {
+    } 
+    else {
         // Par défaut, traiter comme adhérent
         $adherentController->handleAjaxRequest();
     }
     exit;
 }
 
+
 // Récupérer les données pour les entraîneurs
 $entraineurs = $entraineurController->getAllEntraineurs();
 $statsEntraineurs = $entraineurController->getEntraineurStats();
 
-// Gérer les requêtes AJAX
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax'])) {
-    $adherentController->handleAjaxRequest();
-    exit;
+// Récupérer les données pour les activités sportives
+$activites = $activiteController->getAllActivites();
+$statsActivites = $activiteController->getActiviteStatistics();
+
+// Récupérer les données pour les plannings
+$plannings = $planningController->getAllPlannings();
+$statsPlanning = $planningController->getPlanningStatistics();
+
+// Calculer le jour le plus chargé pour les statistiques
+$jourPlusCharge = '-';
+if (!empty($statsPlanning['par_jour'])) {
+    $jourPlusCharge = array_keys($statsPlanning['par_jour'], max($statsPlanning['par_jour']))[0];
 }
+
+
 
 // Récupérer les données pour les adhérents
 $adherents = $adherentController->getAllAdherents();
@@ -44,7 +82,7 @@ $stats = $adherentController->getAdherentStats();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Admin - PulsePlay</title>
+    <title>Dashboard <?php echo ucfirst($user['role']); ?> - PulsePlay</title>
     <style>
         * {
             margin: 0;
@@ -705,10 +743,10 @@ $stats = $adherentController->getAdherentStats();
     <!-- Header -->
     <header class="header">
         <div class="header-container">
-            <div class="logo">PulsePlay Admin</div>
+            <div class="logo">PulsePlay <?php echo ucfirst($user['role']); ?></div>
             <div class="admin-info">
                 <div class="admin-avatar"><?php echo $initiales; ?></div>
-                <span><?php echo $user['prenom'] . ' ' . $user['nom']; ?></span>
+                <span><?php echo $user['prenom'] . ' ' . $user['nom']; ?> (<?php echo ucfirst($user['role']); ?>)</span>
                 <a href="/PulsePlay/logout.php" class="logout-btn">Déconnexion</a>
             </div>
         </div>
@@ -738,11 +776,16 @@ $stats = $adherentController->getAdherentStats();
                 <span class="nav-icon">📅</span>
                 <span>Planning</span>
             </div>
+            
+            <div class="nav-item" onclick="showSection('activites')" data-section="activites">
+                <span class="nav-icon">🏃‍♀️</span>
+                <span>Activités Sportives</span>
+            </div>
         </aside>
 
         <!-- Main Content -->
         <main class="main-content">
-    <div>
+          <div>
             <!-- Section Adhérents -->
             <div id="adherents" class="section active">
                 <div class="section-header">
@@ -755,7 +798,7 @@ $stats = $adherentController->getAdherentStats();
                             📊 Exporter CSV
                         </button>
                     </div>
-            </div>
+        </div>
 
                 <!-- Statistiques -->
                 <div class="stats-grid">
@@ -1016,7 +1059,1488 @@ $stats = $adherentController->getAdherentStats();
             </div>
         </div>
     </div>
-</main>
+
+
+<div>
+   <!-- Section Planning -->
+<div id="planning" class="section">
+    <div class="section-header">
+        <h2 class="section-title">Gestion des Plannings</h2>
+        <div style="display: flex; gap: 1rem;">
+            <button onclick="createPlanning()" class="add-btn">
+                ➕ Ajouter un planning
+            </button>
+            <button onclick="exportPlannings()" class="add-btn" style="background: linear-gradient(45deg, #00b4d8, #0077b6);">
+                📊 Exporter CSV
+            </button>
+        </div>
+    </div>
+
+    <!-- Statistiques Planning -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon">📅</div>
+            </div>
+            <div class="stat-number" id="stat-total-plannings"><?php echo $statsPlanning['total'] ?? 0; ?></div>
+            <div class="stat-label">Total Plannings</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon">🏢</div>
+            </div>
+            <div class="stat-number" id="stat-salles-utilisees"><?php echo count($statsPlanning['par_salle'] ?? []); ?></div>
+            <div class="stat-label">Salles Utilisées</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon">📊</div>
+            </div>
+            <div class="stat-number" id="stat-jour-plus-charge"><?php echo $jourPlusCharge; ?></div>
+            <div class="stat-label">Jour le Plus Chargé</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon">⏱️</div>
+            </div>
+            <div class="stat-number"><?php echo $statsPlanning['duree_moyenne'] ?? 0; ?> min</div>
+            <div class="stat-label">Durée Moyenne</div>
+        </div>
+    </div>
+
+    <!-- Tableau des plannings -->
+    <div class="table-container">
+        <table id="planningsTable">
+            <thead>
+                <tr>
+                    <th onclick="sortTablePlannings(0)">🏃‍♀️ Activité <span id="sort-plannings-0">↕️</span></th>
+                    <th onclick="sortTablePlannings(1)">👨‍🏫 Entraîneur <span id="sort-plannings-1">↕️</span></th>
+                    <th onclick="sortTablePlannings(2)">📅 Jour <span id="sort-plannings-2">↕️</span></th>
+                    <th onclick="sortTablePlannings(3)">⏰ Horaires <span id="sort-plannings-3">↕️</span></th>
+                    <th onclick="sortTablePlannings(4)">🏢 Salle <span id="sort-plannings-4">↕️</span></th>
+                    <th style="width: 200px;">⚙️ Actions</th>
+                </tr>
+            </thead>
+            <tbody id="planningsTableBody">
+                <?php 
+                if (!empty($plannings)) {
+                    foreach ($plannings as $planning) {
+                        echo "<tr data-id='" . $planning->getId() . "'>";
+                        echo "<td>
+                                <div style='display: flex; align-items: center; gap: 0.5rem;'>
+                                    <div style='width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(45deg, #00d4aa, #00b4d8); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.8rem;'>
+                                        🏃‍♀️
+                                    </div>
+                                    <span>" . htmlspecialchars($planning->getNomActivite() ?: 'Activité #' . $planning->getActiviteId()) . "</span>
+                                </div>
+                              </td>";
+                        echo "<td>" . htmlspecialchars($planning->getNomEntraineur() ?: 'Non assigné') . "</td>";
+                        echo "<td>
+                                <span class='statut-badge statut-admin' style='font-size: 0.8rem;'>
+                                    " . htmlspecialchars($planning->getJourSemaine()) . "
+                                </span>
+                              </td>";
+                        echo "<td>
+                                <div style='font-family: monospace; color: #00b4d8;'>
+                                    " . htmlspecialchars($planning->getHeureDebut()) . " - " . htmlspecialchars($planning->getHeureFin()) . "
+                                </div>
+                              </td>";
+                        echo "<td>
+                                <span style='background: rgba(0, 180, 216, 0.2); color: #00b4d8; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;'>
+                                    " . htmlspecialchars($planning->getSalle()) . "
+                                </span>
+                              </td>";
+                        echo "<td>
+                                <div class='action-buttons'>
+                                    <button onclick='viewPlanning(" . $planning->getId() . ")' class='btn-view' title='Voir les détails'>
+                                        👁️ Voir
+                                    </button>
+                                    <button onclick='editPlanning(" . $planning->getId() . ")' class='btn-edit' title='Modifier'>
+                                        ✏️ Modifier
+                                    </button>
+                                    <button onclick='deletePlanning(" . $planning->getId() . ")' class='btn-delete' title='Supprimer'>
+                                        🗑️ Supprimer
+                                    </button>
+                                </div>
+                              </td>";
+                        echo "</tr>";
+                    }
+                } else {
+                    echo "<tr>
+                            <td colspan='6' style='text-align: center; padding: 2rem; color: #b8b8b8;'>
+                                📅 Aucun planning trouvé
+                            </td>
+                          </tr>";
+                }
+                ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Section Activités Sportives -->
+<div id="activites" class="section">
+    <div class="section-header">
+        <h2 class="section-title">Gestion des Activités Sportives</h2>
+        <div style="display: flex; gap: 1rem;">
+            <button onclick="createActivite()" class="add-btn">
+                ➕ Ajouter une activité
+            </button>
+            <button onclick="exportActivites()" class="add-btn" style="background: linear-gradient(45deg, #00b4d8, #0077b6);">
+                📊 Exporter CSV
+            </button>
+        </div>
+    </div>
+
+    <!-- Statistiques Activités -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon">🏃‍♀️</div>
+            </div>
+            <div class="stat-number" id="stat-total-activites"><?php echo $statsActivites['total'] ?? 0; ?></div>
+            <div class="stat-label">Total Activités</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon">👨‍🏫</div>
+            </div>
+            <div class="stat-number" id="stat-entraineurs-activites"><?php echo count($statsActivites['par_entraineur'] ?? []); ?></div>
+            <div class="stat-label">Entraîneurs Actifs</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon">📅</div>
+            </div>
+            <div class="stat-number" id="stat-avec-plannings"><?php echo $statsActivites['avec_plannings'] ?? 0; ?></div>
+            <div class="stat-label">Avec Plannings</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon">⏳</div>
+            </div>
+            <div class="stat-number" id="stat-sans-plannings"><?php echo $statsActivites['sans_plannings'] ?? 0; ?></div>
+            <div class="stat-label">Sans Plannings</div>
+        </div>
+    </div>
+
+    <!-- Tableau des activités -->
+    <div class="table-container">
+        <table id="activitesTable">
+            <thead>
+                <tr>
+                    <th onclick="sortTableActivites(0)">🏃‍♀️ Activité <span id="sort-activites-0">↕️</span></th>
+                    <th onclick="sortTableActivites(1)">📝 Description <span id="sort-activites-1">↕️</span></th>
+                    <th onclick="sortTableActivites(2)">👨‍🏫 Entraîneur <span id="sort-activites-2">↕️</span></th>
+                    <th onclick="sortTableActivites(3)">📅 Plannings <span id="sort-activites-3">↕️</span></th>
+                    <th style="width: 200px;">⚙️ Actions</th>
+                </tr>
+            </thead>
+            <tbody id="activitesTableBody">
+                <?php 
+                if (!empty($activites)) {
+                    foreach ($activites as $activite) {
+                        $planningsCount = $activiteController->getPlanningsCountByActivite($activite->getId());
+                        echo "<tr data-id='" . $activite->getId() . "'>";
+                        echo "<td>
+                                <div style='display: flex; align-items: center; gap: 0.5rem;'>
+                                    <div style='width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(45deg, #00d4aa, #00b4d8); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.8rem;'>
+                                        🏃‍♀️
+                                    </div>
+                                    <span>" . htmlspecialchars($activite->getNom()) . "</span>
+                                </div>
+                              </td>";
+                        echo "<td>
+                                <div style='max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'>
+                                    " . htmlspecialchars($activite->getDescriptionCourte()) . "
+                                </div>
+                              </td>";
+                        echo "<td>
+                                <span style='background: rgba(0, 212, 170, 0.2); color: #00d4aa; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;'>
+                                    Entraîneur " . htmlspecialchars($activite->getEntraineurId()) . "
+                                </span>
+                              </td>";
+                        echo "<td>
+                                <span class='statut-badge statut-admin' style='font-size: 0.8rem;'>
+                                    " . $planningsCount . " planning(s)
+                                </span>
+                              </td>";
+                        echo "<td>
+                                <div class='action-buttons'>
+                                    <button onclick='viewActivite(" . $activite->getId() . ")' class='btn-view' title='Voir les détails'>
+                                        👁️ Voir
+                                    </button>
+                                    <button onclick='editActivite(" . $activite->getId() . ")' class='btn-edit' title='Modifier'>
+                                        ✏️ Modifier
+                                    </button>
+                                    <button onclick='deleteActivite(" . $activite->getId() . ")' class='btn-delete' title='Supprimer'>
+                                        🗑️ Supprimer
+                                    </button>
+                                </div>
+                              </td>";
+                        echo "</tr>";
+                    }
+                } else {
+                    echo "<tr>
+                            <td colspan='5' style='text-align: center; padding: 2rem; color: #b8b8b8;'>
+                                🏃‍♀️ Aucune activité trouvée
+                            </td>
+                          </tr>";
+                }
+                ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+</div>
+
+
+
+<script>
+    // ================== VARIABLES GLOBALES PLANNINGS ==================
+let currentSortColumnPlannings = -1;
+let isAscendingPlannings = true;
+
+// ================== INITIALISATION PLANNING ==================
+function initPlanningSection() {
+    // Charger les plannings
+    loadPlannings();
+    // Charger les statistiques
+    loadPlanningStats();
+}
+
+// ================== INITIALISATION ACTIVITÉS SPORTIVES ==================
+function initActivitesSection() {
+    // Charger les activités
+    loadActivites();
+    // Charger les statistiques
+    loadActiviteStats();
+}
+// Modifier la fonction showSection existante pour inclure l'initialisation Planning
+function showSection(sectionId) {
+    // Masquer toutes les sections
+    const sections = document.querySelectorAll('.section');
+    sections.forEach(section => section.classList.remove('active'));
+    
+    // Retirer la classe active de tous les nav-items
+    const navItems = document.querySelectorAll('.nav-item');
+    navItems.forEach(item => item.classList.remove('active'));
+    
+    // Afficher la section sélectionnée
+    const targetSection = document.getElementById(sectionId);
+    if (targetSection) {
+        targetSection.classList.add('active');
+    }
+    
+    // Ajouter la classe active au nav-item correspondant
+    const activeNavItem = document.querySelector(`[data-section="${sectionId}"]`);
+    if (activeNavItem) {
+        activeNavItem.classList.add('active');
+    }
+    
+    // NOUVEAU : Initialiser la section Planning si c'est celle sélectionnée
+    if (sectionId === 'planning') {
+        initPlanningSection();
+    }
+    
+    // NOUVEAU : Initialiser la section Activités Sportives si c'est celle sélectionnée
+    if (sectionId === 'activites') {
+        initActivitesSection();
+    }
+}
+
+// ================== INITIALISATION SECTION PLANNING ==================
+function initPlanningSection() {
+    // Charger les plannings
+    loadPlannings();
+    // Charger les statistiques
+    loadPlanningStats();
+}
+
+// ================== CHARGEMENT DES DONNÉES ==================
+function loadPlannings() {
+    fetch(window.location.href, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'ajax=1&entity=planning&action=get_all'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            populatePlanningsTable(data.data);
+        }
+    })
+    .catch(error => console.error('Erreur chargement plannings:', error));
+}
+
+
+
+function loadPlanningStats() {
+    fetch(window.location.href, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'ajax=1&entity=planning&action=stats'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            updatePlanningStats(data.data);
+        }
+    })
+    .catch(error => console.error('Erreur chargement stats planning:', error));
+}
+
+function updatePlanningStats(stats) {
+    document.getElementById('stat-total-plannings').textContent = stats.total || 0;
+    document.getElementById('stat-salles-utilisees').textContent = stats.salles_utilisees || 0;
+    
+    // Calculer le jour le plus chargé
+    let jourPlusCharge = '-';
+    if (stats.par_jour && Object.keys(stats.par_jour).length > 0) {
+        const maxCount = Math.max(...Object.values(stats.par_jour));
+        jourPlusCharge = Object.keys(stats.par_jour).find(jour => stats.par_jour[jour] === maxCount) || '-';
+    }
+    document.getElementById('stat-jour-plus-charge').textContent = jourPlusCharge;
+}
+
+// ================== CRUD PLANNINGS ==================
+function createPlanning() {
+    // Charger les activités disponibles
+    fetch(window.location.href, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'ajax=1&entity=planning&action=activites'
+    })
+    .then(response => response.json())
+    .then(data => {
+        let activitesOptions = '<option value="">Sélectionner une activité</option>';
+        
+        if (data.success && data.data && data.data.length > 0) {
+            data.data.forEach(activite => {
+                activitesOptions += `<option value="${activite.id}">${activite.nom} - ${activite.entraineur}</option>`;
+            });
+        } else {
+            activitesOptions += '<option value="" disabled>Aucune activité disponible</option>';
+        }
+
+        const modalContent = `
+            <form id="createPlanningForm" novalidate>
+                <input type="hidden" name="entity" value="planning">
+                <div class="form-group">
+                    <label class="form-label">Activité *</label>
+                    <select name="activite_id" class="form-select" required>
+                        ${activitesOptions}
+                    </select>
+                    <div class="error-message"></div>
+                </div>
+            <div class="form-group">
+                <label class="form-label">Jour de la semaine *</label>
+                <select name="jour_semaine" class="form-select" required>
+                    <option value="">Sélectionner un jour</option>
+                    <option value="Lundi">Lundi</option>
+                    <option value="Mardi">Mardi</option>
+                    <option value="Mercredi">Mercredi</option>
+                    <option value="Jeudi">Jeudi</option>
+                    <option value="Vendredi">Vendredi</option>
+                    <option value="Samedi">Samedi</option>
+                    <option value="Dimanche">Dimanche</option>
+                </select>
+                <div class="error-message"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Heure de début *</label>
+                <input type="time" name="heure_debut" class="form-input" required>
+                <div class="error-message"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Heure de fin *</label>
+                <input type="time" name="heure_fin" class="form-input" required>
+                <div class="error-message"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Salle *</label>
+                <input type="text" name="salle" class="form-input" required placeholder="Nom de la salle">
+                <div class="error-message"></div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn-cancel" onclick="closeModal()">Annuler</button>
+                <button type="submit" class="btn-save">
+                    <div class="loading-spinner"></div>
+                    Créer le planning
+                </button>
+            </div>
+        </form>
+    `;
+
+            createModal('Nouveau Planning', modalContent);
+        setupFormValidation('createPlanningForm', savePlanning);
+    })
+    .catch(error => {
+        console.error('Erreur:', error);
+        showNotification('Erreur lors du chargement des activités', 'error');
+    });
+}
+
+function editPlanning(id) {
+    const button = document.querySelector(`[onclick="editPlanning(${id})"]`);
+    showLoading(button);
+    
+    fetch(window.location.href, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `ajax=1&entity=planning&action=get&id=${id}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading(button);
+        
+        if (data.success && data.data) {
+            const planning = data.data;
+
+            // Charger les activités disponibles pour l'édition
+            fetch(window.location.href, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'ajax=1&entity=planning&action=activites'
+            })
+            .then(response => response.json())
+            .then(activitesData => {
+                let activitesOptions = '<option value="">Sélectionner une activité</option>';
+                
+                if (activitesData.success && activitesData.data && activitesData.data.length > 0) {
+                    activitesData.data.forEach(activite => {
+                        const selected = planning.activite_id == activite.id ? 'selected' : '';
+                        activitesOptions += `<option value="${activite.id}" ${selected}>${activite.nom} - ${activite.entraineur}</option>`;
+                    });
+                } else {
+                    activitesOptions += '<option value="" disabled>Aucune activité disponible</option>';
+                }
+
+                const modalContent = `
+                    <form id="editPlanningForm" novalidate>
+                        <input type="hidden" name="entity" value="planning">
+                        <input type="hidden" name="id" value="${planning.id}">
+                        <div class="form-group">
+                            <label class="form-label">Activité *</label>
+                            <select name="activite_id" class="form-select" required>
+                                ${activitesOptions}
+                            </select>
+                            <div class="error-message"></div>
+                        </div>
+                    <div class="form-group">
+                        <label class="form-label">Jour de la semaine *</label>
+                        <select name="jour_semaine" class="form-select" required>
+                            <option value="">Sélectionner un jour</option>
+                            <option value="Lundi" ${planning.jour_semaine === 'Lundi' ? 'selected' : ''}>Lundi</option>
+                            <option value="Mardi" ${planning.jour_semaine === 'Mardi' ? 'selected' : ''}>Mardi</option>
+                            <option value="Mercredi" ${planning.jour_semaine === 'Mercredi' ? 'selected' : ''}>Mercredi</option>
+                            <option value="Jeudi" ${planning.jour_semaine === 'Jeudi' ? 'selected' : ''}>Jeudi</option>
+                            <option value="Vendredi" ${planning.jour_semaine === 'Vendredi' ? 'selected' : ''}>Vendredi</option>
+                            <option value="Samedi" ${planning.jour_semaine === 'Samedi' ? 'selected' : ''}>Samedi</option>
+                            <option value="Dimanche" ${planning.jour_semaine === 'Dimanche' ? 'selected' : ''}>Dimanche</option>
+                        </select>
+                        <div class="error-message"></div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Heure de début *</label>
+                        <input type="time" name="heure_debut" class="form-input" value="${planning.heure_debut}" required>
+                        <div class="error-message"></div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Heure de fin *</label>
+                        <input type="time" name="heure_fin" class="form-input" value="${planning.heure_fin}" required>
+                        <div class="error-message"></div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Salle *</label>
+                        <input type="text" name="salle" class="form-input" value="${planning.salle}" required>
+                        <div class="error-message"></div>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn-cancel" onclick="closeModal()">Annuler</button>
+                        <button type="submit" class="btn-save">
+                            <div class="loading-spinner"></div>
+                            Sauvegarder
+                        </button>
+                    </div>
+                </form>
+            `;
+
+                            createModal('Modifier le Planning', modalContent);
+                setupFormValidation('editPlanningForm', updatePlanning);
+            })
+            .catch(error => {
+                hideLoading(button);
+                console.error('Erreur:', error);
+                showNotification('Erreur de connexion', 'error');
+            });
+        } else {
+            showNotification('Erreur lors de la récupération des données', 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading(button);
+        console.error('Erreur:', error);
+        showNotification('Erreur de connexion', 'error');
+    });
+}
+
+function viewPlanning(id) {
+    const button = document.querySelector(`[onclick="viewPlanning(${id})"]`);
+    showLoading(button);
+    
+    fetch(window.location.href, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `ajax=1&entity=planning&action=get&id=${id}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading(button);
+        
+        if (data.success && data.data) {
+            const planning = data.data;
+            const modalContent = `
+                <div style="padding: 1rem;">
+                    <div style="text-align: center; margin-bottom: 2rem;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">📅</div>
+                        <h3 style="color: #00d4aa; margin: 0;">${planning.nom_activite || 'Activité #' + planning.activite_id}</h3>
+                        <p style="color: #b8b8b8; margin: 0.5rem 0;">${planning.jour_semaine} - ${planning.heure_debut} à ${planning.heure_fin}</p>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                        <div style="background: rgba(15, 15, 35, 0.5); padding: 1rem; border-radius: 8px;">
+                            <strong style="color: #00d4aa;">Activité:</strong><br>
+                            <span>${planning.nom_activite || 'Activité #' + planning.activite_id}</span>
+                        </div>
+                        <div style="background: rgba(15, 15, 35, 0.5); padding: 1rem; border-radius: 8px;">
+                            <strong style="color: #00d4aa;">Entraîneur:</strong><br>
+                            <span>${planning.nom_entraineur || 'Non assigné'}</span>
+                        </div>
+                        <div style="background: rgba(15, 15, 35, 0.5); padding: 1rem; border-radius: 8px;">
+                            <strong style="color: #00d4aa;">Jour:</strong><br>
+                            <span>${planning.jour_semaine}</span>
+                        </div>
+                        <div style="background: rgba(15, 15, 35, 0.5); padding: 1rem; border-radius: 8px;">
+                            <strong style="color: #00d4aa;">Horaires:</strong><br>
+                            <span>${planning.heure_debut} - ${planning.heure_fin}</span>
+                        </div>
+                        <div style="background: rgba(15, 15, 35, 0.5); padding: 1rem; border-radius: 8px;">
+                            <strong style="color: #00d4aa;">Salle:</strong><br>
+                            <span>${planning.salle}</span>
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: center; margin-top: 2rem;">
+                        <button type="button" class="btn-save" onclick="editPlanning(${planning.id}); closeModal();" style="margin-right: 1rem;">
+                            Modifier
+                        </button>
+                        <button type="button" class="btn-cancel" onclick="closeModal()">
+                            Fermer
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            createModal('Détails du Planning', modalContent);
+        } else {
+            showNotification('Planning non trouvé', 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading(button);
+        console.error('Erreur:', error);
+        showNotification('Erreur de connexion', 'error');
+    });
+}
+
+function deletePlanning(id) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer ce planning ?\n\nCette action est irréversible !')) {
+        const button = document.querySelector(`[onclick="deletePlanning(${id})"]`);
+        showLoading(button);
+        
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `ajax=1&entity=planning&action=delete&id=${id}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading(button);
+            
+            if (data.success) {
+                showNotification(data.message || 'Planning supprimé avec succès', 'success');
+                
+                const row = document.querySelector(`#planningsTable tr[data-id="${id}"]`);
+                if (row) {
+                    row.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                    row.style.opacity = '0';
+                    row.style.transform = 'translateX(-20px)';
+                    setTimeout(() => {
+                        row.remove();
+                        updateResultCountPlannings();
+                        loadPlanningStats();
+                    }, 300);
+                }
+            } else {
+                showNotification(data.message || 'Erreur lors de la suppression', 'error');
+            }
+        })
+        .catch(error => {
+            hideLoading(button);
+            console.error('Erreur:', error);
+            showNotification('Erreur de connexion', 'error');
+        });
+    }
+}
+
+function savePlanning() {
+    const form = document.getElementById('createPlanningForm');
+    const submitBtn = form.querySelector('.btn-save');
+    showLoading(submitBtn);
+
+    const formData = new FormData(form);
+    formData.append('ajax', '1');
+    formData.append('action', 'create');
+
+    fetch(window.location.href, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading(submitBtn);
+        
+        if (data.success) {
+            showNotification(data.message || 'Planning créé avec succès', 'success');
+            closeModal();
+            // Recharger les données au lieu de recharger la page
+            loadPlannings();
+            loadPlanningStats();
+        } else {
+            if (data.errors) {
+                // Afficher les erreurs de validation
+                Object.keys(data.errors).forEach(field => {
+                    const fieldElement = form.querySelector(`[name="${field}"]`);
+                    if (fieldElement) {
+                        fieldElement.classList.add('error');
+                        const errorMsg = fieldElement.parentNode.querySelector('.error-message');
+                        if (errorMsg) {
+                            errorMsg.textContent = data.errors[field];
+                            errorMsg.classList.add('show');
+                        }
+                    }
+                });
+            }
+            showNotification(data.message || 'Erreur lors de la création', 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading(submitBtn);
+        console.error('Erreur:', error);
+        showNotification('Erreur de connexion', 'error');
+    });
+}
+
+function updatePlanning() {
+    const form = document.getElementById('editPlanningForm');
+    const submitBtn = form.querySelector('.btn-save');
+    showLoading(submitBtn);
+
+    const formData = new FormData(form);
+    
+    // Formater les heures pour la base de données
+    const heureDebut = formData.get('heure_debut');
+    const heureFin = formData.get('heure_fin');
+    
+    if (heureDebut) {
+        formData.set('heure_debut', heureDebut + ':00');
+    }
+    if (heureFin) {
+        formData.set('heure_fin', heureFin + ':00');
+    }
+    
+    formData.append('ajax', '1');
+    formData.append('action', 'update');
+
+    fetch(window.location.href, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading(submitBtn);
+        
+        if (data.success) {
+            showNotification(data.message || 'Planning mis à jour avec succès', 'success');
+            closeModal();
+            // Recharger les données au lieu de recharger la page
+            loadPlannings();
+            loadPlanningStats();
+        } else {
+            if (data.errors) {
+                // Afficher les erreurs de validation
+                Object.keys(data.errors).forEach(field => {
+                    const fieldElement = form.querySelector(`[name="${field}"]`);
+                    if (fieldElement) {
+                        fieldElement.classList.add('error');
+                        const errorMsg = fieldElement.parentNode.querySelector('.error-message');
+                        if (errorMsg) {
+                            errorMsg.textContent = data.errors[field];
+                            errorMsg.classList.add('show');
+                        }
+                    }
+                });
+            }
+            showNotification(data.message || 'Erreur lors de la mise à jour', 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading(submitBtn);
+        console.error('Erreur:', error);
+        showNotification('Erreur de connexion', 'error');
+    });
+}
+
+// ================== FONCTIONS UTILITAIRES PLANNINGS ==================
+function populatePlanningsTable(plannings) {
+    const tbody = document.getElementById('planningsTableBody');
+    if (!tbody) return;
+
+    if (plannings.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" style="text-align: center; padding: 3rem; color: #b8b8b8;">
+                    <div style="font-size: 3rem; margin-bottom: 1rem;">📅</div>
+                    <div style="font-size: 1.2rem; margin-bottom: 0.5rem;">Aucun planning trouvé</div>
+                    <div style="font-size: 0.9rem;">Commencez par créer votre premier planning !</div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = plannings.map(planning => `
+        <tr data-id="${planning.id}">
+            <td>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(45deg, #00d4aa, #00b4d8); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.8rem;">
+                        🏃‍♀️
+                    </div>
+                    <span>${planning.nom_activite || 'Activité #' + planning.activite_id}</span>
+                </div>
+            </td>
+            <td>${planning.nom_entraineur || 'Non assigné'}</td>
+            <td>
+                <span class="statut-badge statut-admin" style="font-size: 0.8rem;">
+                    ${planning.jour_semaine}
+                </span>
+            </td>
+            <td>
+                <div style="font-family: monospace; color: #00b4d8;">
+                    ${planning.heure_debut} - ${planning.heure_fin}
+                </div>
+            </td>
+            <td>
+                <span style="background: rgba(0, 180, 216, 0.2); color: #00b4d8; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">
+                    ${planning.salle}
+                </span>
+            </td>
+            <td>
+                <div class="action-buttons">
+                    <button onclick="viewPlanning(${planning.id})" class="btn-view" title="Voir les détails">
+                        👁️ Voir
+                    </button>
+                    <button onclick="editPlanning(${planning.id})" class="btn-edit" title="Modifier">
+                        ✏️ Modifier
+                    </button>
+                    <button onclick="deletePlanning(${planning.id})" class="btn-delete" title="Supprimer">
+                        🗑️ Supprimer
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+
+    updateResultCountPlannings();
+}
+
+function filterPlannings() {
+    const searchTerm = document.getElementById('searchInputPlannings')?.value.toLowerCase() || '';
+    const jourValue = document.getElementById('jourFilter')?.value || '';
+    const salleValue = document.getElementById('salleFilter')?.value || '';
+    const rows = document.querySelectorAll('#planningsTable tbody tr[data-id]');
+    let visibleCount = 0;
+
+    rows.forEach(row => {
+        const activite = row.cells[0].textContent.toLowerCase();
+        const jour = row.cells[2].textContent.toLowerCase();
+        const salle = row.cells[4].textContent.toLowerCase();
+
+        const matchesSearch = searchTerm === '' || 
+            activite.includes(searchTerm) || 
+            salle.includes(searchTerm);
+
+        const matchesJour = jourValue === '' || jour.includes(jourValue.toLowerCase());
+        const matchesSalle = salleValue === '' || salle.includes(salleValue.toLowerCase());
+
+        if (matchesSearch && matchesJour && matchesSalle) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    updateResultCountPlannings(visibleCount);
+}
+
+function updateResultCountPlannings(count) {
+    if (count === undefined) {
+        const visibleRows = document.querySelectorAll('#planningsTable tbody tr[data-id]');
+        count = Array.from(visibleRows).filter(row => row.style.display !== 'none').length;
+    }
+    
+    const resultCount = document.getElementById('resultCountPlannings');
+    if (resultCount) {
+        resultCount.textContent = count;
+    }
+}
+
+function loadSallesFilter() {
+    const salleFilter = document.getElementById('salleFilter');
+    if (!salleFilter) return;
+
+    // Extraire les salles uniques du tableau
+    const rows = document.querySelectorAll('#planningsTable tbody tr[data-id]');
+    const salles = new Set();
+    
+    rows.forEach(row => {
+        const salle = row.cells[4].textContent.trim();
+        if (salle && salle !== 'Non assigné') {
+            salles.add(salle);
+        }
+    });
+
+    // Ajouter les options au filtre
+    const sortedSalles = Array.from(salles).sort();
+    sortedSalles.forEach(salle => {
+        const option = document.createElement('option');
+        option.value = salle;
+        option.textContent = salle;
+        salleFilter.appendChild(option);
+    });
+}
+
+function exportPlannings() {
+    showNotification('Export en cours...', 'info');
+    
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = window.location.href;
+    
+    const ajaxInput = document.createElement('input');
+    ajaxInput.type = 'hidden';
+    ajaxInput.name = 'ajax';
+    ajaxInput.value = '1';
+    
+    const entityInput = document.createElement('input');
+    entityInput.type = 'hidden';
+    entityInput.name = 'entity';
+    entityInput.value = 'planning';
+    
+    const actionInput = document.createElement('input');
+    actionInput.type = 'hidden';
+    actionInput.name = 'action';
+    actionInput.value = 'export';
+    
+    form.appendChild(ajaxInput);
+    form.appendChild(entityInput);
+    form.appendChild(actionInput);
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+    
+    setTimeout(() => {
+        showNotification('Export terminé !', 'success');
+    }, 1500);
+}
+
+function sortTablePlannings(columnIndex) {
+    const table = document.getElementById('planningsTable');
+    if (!table) return;
+    
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
+
+    if (currentSortColumnPlannings === columnIndex) {
+        isAscendingPlannings = !isAscendingPlannings;
+    } else {
+        isAscendingPlannings = true;
+        currentSortColumnPlannings = columnIndex;
+    }
+
+    // Réinitialiser les indicateurs
+    for (let i = 0; i <= 5; i++) {
+        const sortIndicator = document.getElementById(`sort-plannings-${i}`);
+        if (sortIndicator) {
+            sortIndicator.textContent = '↕️';
+            sortIndicator.style.color = '#b8b8b8';
+        }
+    }
+
+    // Mettre à jour l'indicateur actif
+    const activeSortIndicator = document.getElementById(`sort-plannings-${columnIndex}`);
+    if (activeSortIndicator) {
+        activeSortIndicator.textContent = isAscendingPlannings ? '🔼' : '🔽';
+        activeSortIndicator.style.color = '#00d4aa';
+    }
+
+    rows.sort((a, b) => {
+        let aValue = a.cells[columnIndex].textContent.trim();
+        let bValue = b.cells[columnIndex].textContent.trim();
+
+        const result = aValue.localeCompare(bValue, 'fr', { numeric: true });
+        return isAscendingPlannings ? result : -result;
+    });
+
+    rows.forEach(row => tbody.appendChild(row));
+}
+
+// ================== VARIABLES GLOBALES ACTIVITÉS ==================
+let currentSortColumnActivites = -1;
+let isAscendingActivites = true;
+
+// ================== CRUD ACTIVITÉS SPORTIVES ==================
+function createActivite() {
+    // Charger les entraîneurs disponibles
+    loadEntraineursForActivite().then(entraineurs => {
+        const modalContent = `
+            <form id="createActiviteForm" novalidate>
+                <input type="hidden" name="entity" value="activite">
+                <div class="form-group">
+                    <label class="form-label">Nom de l'activité *</label>
+                    <input type="text" name="nom" class="form-input" required placeholder="Ex: Fitness, Yoga, Musculation">
+                    <div class="error-message"></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description *</label>
+                    <textarea name="description" class="form-input" rows="4" required placeholder="Description détaillée de l'activité"></textarea>
+                    <div class="error-message"></div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Entraîneur responsable *</label>
+                    <select name="entraineur_id" class="form-select" required>
+                        <option value="">Sélectionner un entraîneur</option>
+                        ${entraineurs.map(e => `<option value="${e.id}">${e.prenom} ${e.nom}</option>`).join('')}
+                    </select>
+                    <div class="error-message"></div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" onclick="closeModal()">Annuler</button>
+                    <button type="submit" class="btn-save">
+                        <div class="loading-spinner"></div>
+                        Créer l'activité
+                    </button>
+                </div>
+            </form>
+        `;
+
+        createModal('Nouvelle Activité Sportive', modalContent);
+        setupFormValidation('createActiviteForm', saveActivite);
+    });
+}
+
+function editActivite(id) {
+    const button = document.querySelector(`[onclick="editActivite(${id})"]`);
+    showLoading(button);
+    
+    Promise.all([
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `ajax=1&entity=activite&action=get&id=${id}`
+        }).then(response => response.json()),
+        loadEntraineursForActivite()
+    ])
+    .then(([activiteData, entraineurs]) => {
+        hideLoading(button);
+        
+        if (activiteData.success && activiteData.data) {
+            const activite = activiteData.data;
+
+            const modalContent = `
+                <form id="editActiviteForm" novalidate>
+                    <input type="hidden" name="entity" value="activite">
+                    <input type="hidden" name="id" value="${activite.id}">
+                    <div class="form-group">
+                        <label class="form-label">Nom de l'activité *</label>
+                        <input type="text" name="nom" class="form-input" value="${activite.nom}" required>
+                        <div class="error-message"></div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description *</label>
+                        <textarea name="description" class="form-input" rows="4" required>${activite.description}</textarea>
+                        <div class="error-message"></div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Entraîneur responsable *</label>
+                        <select name="entraineur_id" class="form-select" required>
+                            <option value="">Sélectionner un entraîneur</option>
+                            ${entraineurs.map(e => `<option value="${e.id}" ${activite.entraineur_id == e.id ? 'selected' : ''}>${e.prenom} ${e.nom}</option>`).join('')}
+                        </select>
+                        <div class="error-message"></div>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn-cancel" onclick="closeModal()">Annuler</button>
+                        <button type="submit" class="btn-save">
+                            <div class="loading-spinner"></div>
+                            Sauvegarder
+                        </button>
+                    </div>
+                </form>
+            `;
+
+            createModal('Modifier l\'Activité Sportive', modalContent);
+            setupFormValidation('editActiviteForm', updateActivite);
+        } else {
+            showNotification(activiteData.message || 'Erreur lors du chargement', 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading(button);
+        console.error('Erreur:', error);
+        showNotification('Erreur de connexion', 'error');
+    });
+}
+
+function viewActivite(id) {
+    const button = document.querySelector(`[onclick="viewActivite(${id})"]`);
+    showLoading(button);
+    
+    fetch(window.location.href, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `ajax=1&entity=activite&action=get&id=${id}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading(button);
+        
+        if (data.success && data.data) {
+            const activite = data.data;
+            const planningsCount = document.querySelector(`#activitesTable tr[data-id="${id}"] td:nth-child(4) .statut-badge`)?.textContent || '0 planning(s)';
+
+            const modalContent = `
+                <div class="activite-details">
+                    <div class="detail-group">
+                        <label class="detail-label">🏃‍♀️ Activité:</label>
+                        <div class="detail-value">${activite.nom}</div>
+                    </div>
+                    <div class="detail-group">
+                        <label class="detail-label">📝 Description:</label>
+                        <div class="detail-value">${activite.description}</div>
+                    </div>
+                    <div class="detail-group">
+                        <label class="detail-label">👨‍🏫 Entraîneur:</label>
+                        <div class="detail-value">${activite.nom_entraineur || 'Non assigné'}</div>
+                    </div>
+                    <div class="detail-group">
+                        <label class="detail-label">📅 Plannings associés:</label>
+                        <div class="detail-value">${planningsCount}</div>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" onclick="closeModal()">Fermer</button>
+                    <button type="button" class="btn-edit" onclick="editActivite(${activite.id})">✏️ Modifier</button>
+                </div>
+            `;
+
+            createModal('Détails de l\'Activité Sportive', modalContent);
+        } else {
+            showNotification(data.message || 'Erreur lors du chargement', 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading(button);
+        console.error('Erreur:', error);
+        showNotification('Erreur de connexion', 'error');
+    });
+}
+
+function deleteActivite(id) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer cette activité ? Cette action est irréversible.')) {
+        const button = document.querySelector(`[onclick="deleteActivite(${id})"]`);
+        showLoading(button);
+        
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `ajax=1&entity=activite&action=delete&id=${id}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading(button);
+            
+            if (data.success) {
+                showNotification(data.message || 'Activité supprimée avec succès', 'success');
+                
+                const row = document.querySelector(`#activitesTable tr[data-id="${id}"]`);
+                if (row) {
+                    row.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                    row.style.opacity = '0';
+                    row.style.transform = 'translateX(-20px)';
+                    setTimeout(() => {
+                        row.remove();
+                        updateResultCountActivites();
+                        loadActiviteStats();
+                    }, 300);
+                }
+            } else {
+                showNotification(data.message || 'Erreur lors de la suppression', 'error');
+            }
+        })
+        .catch(error => {
+            hideLoading(button);
+            console.error('Erreur:', error);
+            showNotification('Erreur de connexion', 'error');
+        });
+    }
+}
+
+function saveActivite() {
+    const form = document.getElementById('createActiviteForm');
+    const submitBtn = form.querySelector('.btn-save');
+    showLoading(submitBtn);
+
+    const formData = new FormData(form);
+    formData.append('ajax', '1');
+    formData.append('action', 'create');
+
+    fetch(window.location.href, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading(submitBtn);
+        
+        if (data.success) {
+            showNotification(data.message || 'Activité créée avec succès', 'success');
+            closeModal();
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            if (data.errors) {
+                Object.keys(data.errors).forEach(field => {
+                    const fieldElement = form.querySelector(`[name="${field}"]`);
+                    if (fieldElement) {
+                        fieldElement.classList.add('error');
+                        const errorMsg = fieldElement.parentNode.querySelector('.error-message');
+                        if (errorMsg) {
+                            errorMsg.textContent = data.errors[field];
+                            errorMsg.classList.add('show');
+                        }
+                    }
+                });
+            }
+            showNotification(data.message || 'Erreur lors de la création', 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading(submitBtn);
+        console.error('Erreur:', error);
+        showNotification('Erreur de connexion', 'error');
+    });
+}
+
+function updateActivite() {
+    const form = document.getElementById('editActiviteForm');
+    const submitBtn = form.querySelector('.btn-save');
+    showLoading(submitBtn);
+
+    const formData = new FormData(form);
+    formData.append('ajax', '1');
+    formData.append('action', 'update');
+
+    fetch(window.location.href, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading(submitBtn);
+        
+        if (data.success) {
+            showNotification(data.message || 'Activité mise à jour avec succès', 'success');
+            closeModal();
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            if (data.errors) {
+                Object.keys(data.errors).forEach(field => {
+                    const fieldElement = form.querySelector(`[name="${field}"]`);
+                    if (fieldElement) {
+                        fieldElement.classList.add('error');
+                        const errorMsg = fieldElement.parentNode.querySelector('.error-message');
+                        if (errorMsg) {
+                            errorMsg.textContent = data.errors[field];
+                            errorMsg.classList.add('show');
+                        }
+                    }
+                });
+            }
+            showNotification(data.message || 'Erreur lors de la mise à jour', 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading(submitBtn);
+        console.error('Erreur:', error);
+        showNotification('Erreur de connexion', 'error');
+    });
+}
+
+// ================== FONCTIONS UTILITAIRES ACTIVITÉS ==================
+function loadEntraineursForActivite() {
+    return fetch(window.location.href, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'ajax=1&entity=activite&action=entraineurs'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            return data.data;
+        } else {
+            console.error('Erreur lors du chargement des entraîneurs:', data.message);
+            return [];
+        }
+    })
+    .catch(error => {
+        console.error('Erreur de connexion:', error);
+        return [];
+    });
+}
+
+function loadActivites() {
+    fetch(window.location.href, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'ajax=1&entity=activite&action=get_all'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            populateActivitesTable(data.data);
+        } else {
+            showNotification(data.message || 'Erreur lors du chargement', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Erreur:', error);
+        showNotification('Erreur de connexion', 'error');
+    });
+}
+
+function loadActiviteStats() {
+    fetch(window.location.href, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'ajax=1&entity=activite&action=stats'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            updateActiviteStats(data.data);
+        }
+    })
+    .catch(error => {
+        console.error('Erreur:', error);
+    });
+}
+
+function updateActiviteStats(stats) {
+    document.getElementById('stat-total-activites').textContent = stats.total || 0;
+    document.getElementById('stat-entraineurs-activites').textContent = Object.keys(stats.par_entraineur || {}).length;
+    document.getElementById('stat-avec-plannings').textContent = stats.avec_plannings || 0;
+    document.getElementById('stat-sans-plannings').textContent = stats.sans_plannings || 0;
+}
+
+function populateActivitesTable(activites) {
+    const tbody = document.getElementById('activitesTableBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    
+    if (activites.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" style="text-align: center; padding: 2rem; color: #b8b8b8;">
+                    🏃‍♀️ Aucune activité trouvée
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    activites.forEach(activite => {
+        const row = document.createElement('tr');
+        row.setAttribute('data-id', activite.id);
+        
+        row.innerHTML = `
+            <td>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(45deg, #00d4aa, #00b4d8); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.8rem;">
+                        🏃‍♀️
+                    </div>
+                    <span>${activite.nom}</span>
+                </div>
+            </td>
+            <td>
+                <div style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    ${activite.description.length > 100 ? activite.description.substring(0, 100) + '...' : activite.description}
+                </div>
+            </td>
+            <td>
+                <span style="background: rgba(0, 212, 170, 0.2); color: #00d4aa; padding: 0.2rem 0.5rem; border-radius: 12px; font-size: 0.8rem;">
+                    ${activite.nom_entraineur || 'Non assigné'}
+                </span>
+            </td>
+            <td>
+                <span class="statut-badge statut-admin" style="font-size: 0.8rem;">
+                    ${activite.plannings_count || 0} planning(s)
+                </span>
+            </td>
+            <td>
+                <div class="action-buttons">
+                    <button onclick="viewActivite(${activite.id})" class="btn-view" title="Voir les détails">
+                        👁️ Voir
+                    </button>
+                    <button onclick="editActivite(${activite.id})" class="btn-edit" title="Modifier">
+                        ✏️ Modifier
+                    </button>
+                    <button onclick="deleteActivite(${activite.id})" class="btn-delete" title="Supprimer">
+                        🗑️ Supprimer
+                    </button>
+                </div>
+            </td>
+        `;
+        
+        tbody.appendChild(row);
+    });
+    
+    updateResultCountActivites(activites.length);
+}
+
+function updateResultCountActivites(count) {
+    const countElement = document.getElementById('activites-count');
+    if (countElement) {
+        countElement.textContent = count || 0;
+    }
+}
+
+function exportActivites() {
+    window.location.href = window.location.href + '?' + new URLSearchParams({
+        ajax: '1',
+        entity: 'activite',
+        action: 'export'
+    });
+}
+
+function sortTableActivites(columnIndex) {
+    const table = document.getElementById('activitesTable');
+    if (!table) return;
+    
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
+
+    if (currentSortColumnActivites === columnIndex) {
+        isAscendingActivites = !isAscendingActivites;
+    } else {
+        isAscendingActivites = true;
+        currentSortColumnActivites = columnIndex;
+    }
+
+    // Réinitialiser les indicateurs
+    for (let i = 0; i <= 4; i++) {
+        const sortIndicator = document.getElementById(`sort-activites-${i}`);
+        if (sortIndicator) {
+            sortIndicator.textContent = '↕️';
+            sortIndicator.style.color = '#b8b8b8';
+        }
+    }
+
+    // Mettre à jour l'indicateur actif
+    const activeSortIndicator = document.getElementById(`sort-activites-${columnIndex}`);
+    if (activeSortIndicator) {
+        activeSortIndicator.textContent = isAscendingActivites ? '🔼' : '🔽';
+        activeSortIndicator.style.color = '#00d4aa';
+    }
+
+    rows.sort((a, b) => {
+        let aValue = a.cells[columnIndex].textContent.trim();
+        let bValue = b.cells[columnIndex].textContent.trim();
+
+        const result = aValue.localeCompare(bValue, 'fr', { numeric: true });
+        return isAscendingActivites ? result : -result;
+    });
+
+    rows.forEach(row => tbody.appendChild(row));
+}
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 <!-- ============= FONCTIONS JAVASCRIPT À AJOUTER DANS LA SECTION SCRIPT ============= -->
 
 <script>
@@ -1478,7 +3002,7 @@ function sortTableEntraineurs(columnIndex) {
 // ================== FONCTION UTILITAIRE POUR LA VALIDATION ==================
 function setupFormValidation(formId, submitCallback) {
     const form = document.getElementById(formId);
-    const fields = form.querySelectorAll('input');
+    const fields = form.querySelectorAll('input, select, textarea');
 
     // Validation en temps réel
     fields.forEach(field => {
@@ -1498,17 +3022,98 @@ function setupFormValidation(formId, submitCallback) {
         e.preventDefault();
         e.stopPropagation();
         
+        // Nettoyer les erreurs précédentes
+        const errorMessages = form.querySelectorAll('.error-message');
+        errorMessages.forEach(msg => {
+            msg.textContent = '';
+            msg.classList.remove('show');
+        });
+        
+        const inputs = form.querySelectorAll('.form-input, .form-select');
+        inputs.forEach(input => {
+            input.classList.remove('error');
+        });
+        
         if (validateForm(formId)) {
             submitCallback();
         }
     });
 
-    // Focus sur le premier champ
-    setTimeout(() => {
-        const firstInput = form.querySelector('input:not([type="hidden"])');
-        if (firstInput) firstInput.focus();
-    }, 100);
-}
+            // Focus sur le premier champ
+        setTimeout(() => {
+            const firstInput = form.querySelector('input:not([type="hidden"]), select');
+            if (firstInput) firstInput.focus();
+        }, 100);
+    }
+
+    function validateField(field) {
+        const errorMsg = field.parentNode.querySelector('.error-message');
+        
+        // Nettoyer l'erreur précédente
+        if (errorMsg) {
+            errorMsg.textContent = '';
+            errorMsg.classList.remove('show');
+        }
+        field.classList.remove('error');
+        
+        // Validation selon le type de champ
+        if (field.hasAttribute('required') && !field.value.trim()) {
+            field.classList.add('error');
+            if (errorMsg) {
+                errorMsg.textContent = 'Ce champ est obligatoire';
+                errorMsg.classList.add('show');
+            }
+            return false;
+        }
+        
+        // Validation spécifique pour les heures
+        if (field.type === 'time' && field.value) {
+            const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
+            if (!timeRegex.test(field.value)) {
+                field.classList.add('error');
+                if (errorMsg) {
+                    errorMsg.textContent = 'Format d\'heure invalide (HH:MM)';
+                    errorMsg.classList.add('show');
+                }
+                return false;
+            }
+        }
+        
+        return true;
+    }
+
+    function validateForm(formId) {
+        const form = document.getElementById(formId);
+        const fields = form.querySelectorAll('input, select, textarea');
+        let isValid = true;
+        
+        fields.forEach(field => {
+            if (!validateField(field)) {
+                isValid = false;
+            }
+        });
+        
+        // Validation spécifique pour les heures de planning
+        const heureDebut = form.querySelector('input[name="heure_debut"]');
+        const heureFin = form.querySelector('input[name="heure_fin"]');
+        
+        if (heureDebut && heureFin && heureDebut.value && heureFin.value) {
+            const debut = new Date(`2000-01-01T${heureDebut.value}`);
+            const fin = new Date(`2000-01-01T${heureFin.value}`);
+            
+            if (debut >= fin) {
+                isValid = false;
+                heureFin.classList.add('error');
+                const errorMsg = heureFin.parentNode.querySelector('.error-message');
+                if (errorMsg) {
+                    errorMsg.textContent = 'L\'heure de fin doit être postérieure à l\'heure de début';
+                    errorMsg.classList.add('show');
+                }
+            }
+        }
+        
+        return isValid;
+    }
 </script>
 
 

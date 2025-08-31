@@ -1,11 +1,10 @@
 <?php
 define('BASE_PATH', __DIR__);
-$pdo = Database::connect();
 
 class Database {
     private static $instance = null;
 
-    public static function connect() {
+    public static function connect(): PDO {
         if (self::$instance === null) {
             try {
                 self::$instance = new PDO(
@@ -21,4 +20,11 @@ class Database {
         }
         return self::$instance;
     }
+}
+
+// Créer la variable globale $pdo pour les contrôleurs
+try {
+    $GLOBALS['pdo'] = Database::connect();
+} catch (Exception $e) {
+    die("Erreur lors de l'initialisation de la base de données : " . $e->getMessage());
 }

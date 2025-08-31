@@ -18,8 +18,8 @@ class UtilisateurController {
 
             $redirect = match($user['role']) {
                 'admin' => '/PulsePlay/view/back/dashbordAdmin.php',
-                'entraineur' => '/PulsePlay/entraineur/planning.php',
-                'adherent' => '/PulsePlay/adherent/activites.php',
+                'entraineur' => '/PulsePlay/view/back/dashbordAdmin.php',
+                'adherent' => '/PulsePlay/view/adherent/dashboard.php',
                 default => '/PulsePlay/index.php'
             };
 
@@ -73,6 +73,76 @@ class UtilisateurController {
             echo json_encode(['success'=>false,'message'=>'Erreur lors de l\'inscription.']);
         }
     }
+
+    public function update() {
+        header('Content-Type: application/json');
+
+        $id = (int)($_POST['id'] ?? 0);
+        $nom = trim($_POST['nom'] ?? '');
+        $prenom = trim($_POST['prenom'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $mot_de_passe = $_POST['mot_de_passe'] ?? '';
+
+        if(!$id || !$nom || !$prenom || !$email){
+            echo json_encode(['success'=>false,'message'=>'Tous les champs sont obligatoires.']);
+            return;
+        }
+        if(!filter_var($email, FILTER_VALIDATE_EMAIL)){
+            echo json_encode(['success'=>false,'message'=>'Email invalide.']);
+            return;
+        }
+        if($mot_de_passe && strlen($mot_de_passe) < 6){
+            echo json_encode(['success'=>false,'message'=>'Le mot de passe doit contenir au moins 6 caractères.']);
+            return;
+        }
+
+        $model = new UtilisateurModel();
+        
+        // Vérifier si l'email existe déjà (sauf pour l'utilisateur actuel)
+        $existingUser = $model->getUserByEmail($email);
+        if($existingUser && $existingUser['id'] != $id){
+            echo json_encode(['success'=>false,'message'=>'Cet email est déjà utilisé.']);
+            return;
+        }
+
+        // Récupérer l'utilisateur actuel
+        $currentUser = $model->getUserById($id);
+        if(!$currentUser){
+            echo json_encode(['success'=>false,'message'=>'Utilisateur non trouvé.']);
+            return;
+        }
+
+        // Préparer les données de mise à jour
+        $updateData = [
+            'id' => $id,
+            'nom' => $nom,
+            'prenom' => $prenom,
+            'email' => $email,
+            'role' => $currentUser['role'],
+            'is_actif' => $currentUser['is_actif']
+        ];
+
+        // Ajouter le mot de passe seulement s'il est fourni
+        if($mot_de_passe){
+            $updateData['mot_de_passe'] = password_hash($mot_de_passe, PASSWORD_DEFAULT);
+        }
+
+        $result = $model->updateUser($updateData);
+
+        if($result){
+            // Mettre à jour la session si c'est l'utilisateur connecté
+            if(isset($_SESSION['user']) && $_SESSION['user']['id'] == $id){
+                $_SESSION['user'] = array_merge($_SESSION['user'], [
+                    'nom' => $nom,
+                    'prenom' => $prenom,
+                    'email' => $email
+                ]);
+            }
+            echo json_encode(['success'=>true,'message'=>'Profil mis à jour avec succès !']);
+        } else {
+            echo json_encode(['success'=>false,'message'=>'Erreur lors de la mise à jour.']);
+        }
+    }
 }
 
 // Route simple
@@ -81,6 +151,17 @@ if(isset($_GET['action'])){
     match($_GET['action']){
         'login' => $controller->login(),
         'signup' => $controller->signup(),
+        'update' => $controller->update(),
+        default => null
+    };
+}
+
+// Gestion AJAX
+if(isset($_POST['ajax']) && isset($_POST['action'])){
+    match($_POST['action']){
+        'login' => $controller->login(),
+        'signup' => $controller->signup(),
+        'update' => $controller->update(),
         default => null
     };
 }

@@ -4,6 +4,7 @@
 require_once __DIR__ . '/../models/AdherentDAO.php';
 require_once __DIR__ . '/../models/Adherent.php';
 
+
 class AdherentController {
     private $dao;
 
